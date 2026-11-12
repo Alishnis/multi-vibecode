@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/coord/hooks/contract_hook.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
