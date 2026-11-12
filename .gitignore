@@ -4,3 +4,4 @@ __pycache__/
 coord/me.json
 .env
 .DS_Store
+.claude/settings.local.json

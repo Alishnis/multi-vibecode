@@ -48,6 +48,13 @@ def main() -> None:
             "These decisions apply to this project. A request that contradicts "
             "one of them should be raised with the user before any code is written."
         )
+    # Repeated on every prompt, because agents forget instructions given once.
+    print(
+        "New project decisions made in this session (framework, library, database, "
+        "API endpoint, data field name, port, convention) are recorded with the "
+        "team-contract record_decision tool before the code for them is written, "
+        "one call per decision, so that teammates' agents see them."
+    )
 
 
 if __name__ == "__main__":
