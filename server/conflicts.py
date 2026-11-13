@@ -154,10 +154,19 @@ library where one was chosen), a different path or response shape for a decided
 endpoint, a different name for a decided field, a different port, or the
 opposite of a decided convention. Cite the decision's id and the file.
 
-Do not report missing features, bugs, style, tests, or anything the contract
-does not mention. Removed lines break nothing. Configuration and tooling files
-for the team's own coordination tool are not project code. If you are not sure,
-report nothing: a false alarm stops a teammate from sharing good work.
+Judge the executable behavior in the added lines. A filename containing
+"test", "check", "demo", or "team-contract" does not exempt that code from
+the contract. The caller already excludes Team Contract's installed tooling
+under coord/, .claude/, and .mcp.json. Other files still need review.
+For example, if the todo backend must use Django, added code that constructs
+an Express app, registers GET /todos and calls app.listen breaks that decision,
+even in team-contract-check-123.js and even when the port matches.
+Distinguish this runnable backend from a test that merely sends requests to
+the chosen backend or asserts its results.
+
+Do not report missing features, general bugs, style preferences, or test
+coverage that the contract does not mention. Removed lines break nothing.
+If the added behavior does not establish a contradiction, report nothing.
 
 Write each explanation as one plain sentence of at most 25 words that says
 what the code does and what the team decided, without mentioning ids.

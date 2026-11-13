@@ -133,10 +133,19 @@ def gather_me(target: Path, args: argparse.Namespace) -> dict:
     """Who is installing. On a rerun, the earlier answers become the defaults."""
     old = read_json(target / "coord/me.json")
     return {
+        **old,  # Keep local preferences, including overlap mode, when upgrading.
         "name": ask("name", args.name, old.get("name")),
         "room": ask("room", args.room, old.get("room") or "demo"),
-        "server": ask("server", args.server, old.get("server") or "http://127.0.0.1:8000").rstrip("/"),
+        "server": server_address(ask("server", args.server, old.get("server") or "http://127.0.0.1:8000")),
     }
+
+
+def server_address(value: str) -> str:
+    """Accept a pasted dashboard link; room and other query data are not an API base."""
+    parsed = urllib.parse.urlsplit(value.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        stop("the server address must start with http:// or https://, for example https://team-contract.onrender.com")
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
 
 
 def update_gitignore(target: Path) -> None:

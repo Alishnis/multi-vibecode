@@ -149,8 +149,31 @@ By default the watcher applies only pull requests that someone approved. Many sm
 
 Rerun the installer and restart Claude Code in each teammate's project. Use the same room with distinct names. In a linked room, both checkouts must point to the room's GitHub repository.
 
-When Claude Code successfully edits a file using Edit, Write, MultiEdit, or NotebookEdit, Team Contract reports the project-relative path, teammate name, branch if available, and time. When a different teammate's agent is about to edit the same path within 30 minutes, Claude Code pauses before the edit, shows a **FILE OVERLAP** notice with who edited the file and when, and asks you to allow or deny it. After you allow it once, further edits to that file go through until a teammate changes it again. The dashboard shows the recent reports and marks paths reported by multiple teammates.
+When Claude Code successfully edits a file using Edit, Write, MultiEdit, or NotebookEdit, Team Contract reports the project-relative path, teammate name, branch if available, and time. When a different teammate's agent is about to edit the same path within 30 minutes, the hook delivers a **FILE OVERLAP** notice to the terminal user and context to Claude before the edit. By default it also asks you to allow or deny the edit. After an allowed edit succeeds and is reported, further edits to that file go through until a teammate changes it again. The dashboard shows the recent reports and marks paths reported by multiple teammates.
+
+Example terminal notice (Claude Code controls its visual styling):
+
+```text
+[Team Contract: FILE OVERLAP]
+File: src/todos.py
+  Ali on ali/todos edited this file (just now).
+Their changes may not be in your local copy yet.
+Next: review their changes before editing the same code.
+Choose whether to continue in Claude Code's approval prompt.
+```
+
+This reports a recent edit, not proof that someone is still typing or that the code will conflict. The same branch name on two computers does not mean their files are identical. The hook does not fetch or merge code.
 
 To try it, have Claude Code in the first checkout write a test file such as `src/todos.py`. Then ask Claude Code in the second checkout to edit the same relative path, and watch for the question before the second change. Shell commands and edits made outside these Claude Code tools are outside this check. Only file metadata is sent to the server.
 
-To get a note for the agent instead of a question for you, add `"overlap": "note"` to `coord/me.json`. In a session with nobody at the keyboard (`claude -p`), a question cannot be answered, so the edit is refused; use the note setting there.
+To show the terminal warning and give Claude context without requesting approval, add `"overlap": "note"` to `coord/me.json`. Normal Claude Code permissions still apply. The installer preserves this preference on upgrades. In a session with nobody at the keyboard (`claude -p`), a question cannot be answered, so the default edit is refused; use the note setting there.
+
+If the check fails, a **CHECK UNAVAILABLE** notice says the edit was not checked. The hook does not block the edit on a connection failure. A quiet successful check means no matching recent report was found; it cannot guarantee no teammate is editing.
+
+Warnings arrive when Claude attempts a supported edit. They are not background notifications in an idle terminal. This stage supports Claude Code; shell edits, external editors and other agents need separate integrations.
+
+Local automated check (uses two temporary installed clients and a local server, without AI calls):
+
+```sh
+.venv/bin/python -B -m unittest server.test_terminal_warnings
+```

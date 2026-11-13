@@ -244,7 +244,7 @@ def contract_findings(me: dict, branch: str, ref: str) -> list[dict]:
         notice(f"The contract check did not run ({check[9:]}), so your code was not checked.")
     elif check == "checked" and not reply.get("findings"):
         cut = " (the first part of a large change)" if len(diff) > SHARE_DIFF_LIMIT else ""
-        notice(f"Contract check passed{cut}: the code fits the team's decisions.")
+        notice(f"Contract check completed{cut}: no contradictions detected in the reviewed code.")
     return reply.get("findings") or []
 
 

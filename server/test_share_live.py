@@ -3,9 +3,9 @@
 Run from the project root:
     .venv/bin/python -m server.test_share_live
 
-Twelve sample code changes against a five-decision contract. Seven break a
-decision, five do not. Rerun it whenever SHARE_PROMPT or the model changes.
-Exits with code 0 when at least eleven are judged correctly.
+Twelve baseline samples plus regressions for runnable code in test-named files.
+Rerun whenever SHARE_PROMPT or the model changes. Requires at least eleven
+baseline successes and every regression to pass.
 """
 
 import sys
@@ -41,4 +41,27 @@ for name, expect, file, diff in CASES:
     got = bool(review.findings); ok += got == expect
     print(f"{'ok ' if got == expect else 'BAD'} {name:28} {time.time()-start:4.1f}s", [(f.existing_id, f.explanation[:90]) for f in review.findings])
 print(f"{ok}/{len(CASES)} correct")
-sys.exit(0 if ok >= 11 else 1)
+django_contract = [dict(id=2, category="stack", text="The todo backend uses Django on port 18764.")]
+express = (
+    '+const express = require("express")\n'
+    '+const app = express()\n'
+    '+app.get("/todos", (req, res) => res.json({ todos: [] }))\n'
+    '+app.listen(18764)\n'
+)
+regressions = [
+    ("team-contract-check-1794575848.js", True, express),
+    ("server.js", True, express),
+    ("tests/test_todos.py", False,
+     "+from django.test import Client\n"
+     "+def test_todos():\n"
+     "+    assert Client().get('/todos').status_code == 200\n"),
+]
+regressions_ok = True
+for file, expected, body in regressions:
+    review = conflicts.check_share(d(file, body), [file], django_contract)
+    passed = bool(review.findings) == expected
+    if expected:
+        passed = passed and any(f.existing_id == 2 and f.file == file for f in review.findings)
+    regressions_ok = regressions_ok and passed
+    print(f"{'ok ' if passed else 'BAD'} Django regression {file}", flush=True)
+sys.exit(0 if ok >= 11 and regressions_ok else 1)

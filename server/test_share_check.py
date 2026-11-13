@@ -130,7 +130,7 @@ class PublishCheckTest(unittest.TestCase):
         self.assertTrue(self.pushed())
 
     def test_clean_or_unavailable_check_lets_the_push_through(self):
-        self.assertIn("Contract check passed", self.publish({"check": "checked", "findings": []}))
+        self.assertIn("no contradictions detected", self.publish({"check": "checked", "findings": []}))
         self.assertTrue(self.pushed())
         self.git("commit", "-q", "--allow-empty", "-m", "More")
         self.assertIn("did not run (no key)", self.publish({"check": "skipped: no key", "findings": []}))

@@ -1,6 +1,7 @@
 """Run with python -m unittest server.test_client_download. No API key needed."""
 
 import io
+import argparse
 import json
 import subprocess
 import sys
@@ -18,6 +19,33 @@ import install  # noqa: E402
 
 
 class ClientDownloadTest(unittest.TestCase):
+    def test_pasted_dashboard_link_is_saved_as_api_base_and_room_stays_separate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            args = argparse.Namespace(name="Ali", room="team-test-1794575848",
+                                      server="https://team-contract.onrender.com/?room=another-room#files")
+            me = install.gather_me(Path(directory), args)
+            self.assertEqual(me["server"], "https://team-contract.onrender.com")
+            self.assertEqual(me["room"], "team-test-1794575848")
+            self.assertEqual(install.server_address("http://localhost:8000/team/?room=test"),
+                             "http://localhost:8000/team")
+
+    def test_reinstall_repairs_saved_dashboard_url(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / "coord").mkdir()
+            (project / "coord/me.json").write_text(json.dumps({
+                "name": "Mei", "room": "same-room", "overlap": "note",
+                "server": "https://team-contract.onrender.com/?room=same-room",
+            }))
+            me = install.gather_me(project, argparse.Namespace(name=None, room=None, server=None))
+            self.assertEqual(me["server"], "https://team-contract.onrender.com")
+            self.assertEqual(me["overlap"], "note")
+
+    def test_invalid_server_address_stops_installation(self):
+        for value in ("team-contract.onrender.com", "file:///tmp/project", "https://"):
+            with self.subTest(value=value), self.assertRaises(SystemExit):
+                install.server_address(value)
+
     def test_download_holds_everything_the_installer_needs(self):
         needed = {"install.py", ".claude/settings.json", ".mcp.json", *install.FILES_TO_COPY}
         self.assertEqual(set(server.CLIENT_FILES), needed)
