@@ -206,11 +206,13 @@ Before an edit, the hook asks the room whether a teammate changed the same file 
 | Kind | When | What to do |
 | --- | --- | --- |
 | **ACTIVE COLLISION** | A teammate changed the file in the last 5 minutes and their agent is still working. | Agree who changes which part before editing. |
-| **OUTDATED READ** | Their change is already in your copy of the file, but this session read the file before it. | Read the file again, then edit. |
+| **OUTDATED READ** | Their change is already in your checkout (your file, or your Git history), but this session read the file before it. | Read the file again, then edit. |
 | **WORK IN ANOTHER CHECKOUT** | Their change is in their own copy, not yours. Reading your file again will not show it. | Get their changes first, or agree who edits what. A merge conflict is forming. |
 | **RECENT EDIT** | Their change was in your copy when this session last read the file. | Low urgency. Check that your edit does not undo theirs. |
 
 The first three block the edit with `permissionDecision: deny`; claimed files also block. Claude receives the rejection before the tool writes. A recent edit is a note only. If your file exactly matches the teammate's reported version and this session has read it since, the edit warning clears (a separate live claim may still block). Resolve claims with the teammate and have their owner release them when finished. For changes in another checkout, review and integrate them first. Do not ask the agent to bypass the hook through a shell command.
+
+**Git-aware.** Each edit report also carries Git's own fingerprint of the file. Before an edit, the hook looks at the file's last 40 commits in your checkout. If a teammate's exact version is in that history, you have already pulled it, so it is never reported as work in another checkout, even if you have edited the file since. It then counts like a change in your own copy: quiet if this session has read the file since, OUTDATED READ if not. A version the teammate has not committed and pushed cannot be in your history, so it still shows as another checkout.
 
 Example terminal notice (Claude Code controls its visual styling):
 

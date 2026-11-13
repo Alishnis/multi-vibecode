@@ -193,7 +193,7 @@ def create_tables() -> None:
         # checkout_id are opaque ids made on the teammate's computer;
         # content_hash is a fingerprint of the file after the edit. None of
         # them reveals a folder name, a prompt or any code.
-        for column in ("session", "checkout_id", "summary", "tool", "content_hash"):
+        for column in ("session", "checkout_id", "summary", "tool", "content_hash", "blob"):
             add_column(conn, "file_edits", column, "TEXT")
         # A claim says what a teammate is about to work on, before any edit.
         # It is a notice for the others, never a lock.
@@ -520,6 +520,7 @@ class FileActivity(RoomAuthor):
     session: OpaqueId = None          # which agent session made the edit
     checkout_id: OpaqueId = None      # which working folder it was made in
     content_hash: OpaqueId = None     # fingerprint of the file after the edit
+    blob: OpaqueId = None             # the same file as Git fingerprints it (matches Git history)
     tool: Annotated[str | None, BeforeValidator(short_text(50))] = None
     summary: Annotated[str | None, BeforeValidator(short_text(300))] = None
     # The changed lines themselves, only so the small model can describe them
@@ -1186,7 +1187,7 @@ def check_file(activity: FileActivity) -> dict:
             # Only edits newer than this person's own last edit of the file.
             # Once they have gone ahead, they are not asked again until a
             # teammate touches the file again.
-            "SELECT e.author, e.branch, e.edited_at, e.summary, e.checkout_id, e.content_hash, "
+            "SELECT e.author, e.branch, e.edited_at, e.summary, e.checkout_id, e.content_hash, e.blob, "
             "       p.last_seen FROM file_edits e "
             "LEFT JOIN people p ON p.room = e.room AND p.name = e.author "
             "WHERE e.room = ? AND e.path = ? AND e.author <> ? AND e.edited_at >= ? "
@@ -1255,13 +1256,13 @@ def record_file_edit(activity: FileActivity, background: BackgroundTasks) -> dic
         )
         conn.execute(
             "INSERT INTO file_edits (room, path, author, branch, edited_at, session, checkout_id, "
-            "summary, tool, content_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "summary, tool, content_hash, blob) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT (room, path, author) DO UPDATE SET "
             "branch = excluded.branch, edited_at = excluded.edited_at, session = excluded.session, "
             "checkout_id = excluded.checkout_id, summary = excluded.summary, tool = excluded.tool, "
-            "content_hash = excluded.content_hash",
+            "content_hash = excluded.content_hash, blob = excluded.blob",
             (activity.room, activity.path, activity.author, activity.branch, edited_at, activity.session,
-             activity.checkout_id, activity.summary, activity.tool, activity.content_hash),
+             activity.checkout_id, activity.summary, activity.tool, activity.content_hash, activity.blob),
         )
     if activity.change and conflicts.small_configured():
         background.add_task(improve_summary, activity.room, activity.path, activity.author,

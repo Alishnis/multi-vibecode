@@ -17,7 +17,8 @@ There are four kinds of overlap, strongest first:
 
   ACTIVE COLLISION           a teammate changed the file in the last 5 minutes and is
                              still working
-  OUTDATED READ              their change is already in your copy of the file, but this
+  OUTDATED READ              their change is already in your checkout (your file, or your
+                             Git history), but this
                              session read the file before it
   WORK IN ANOTHER CHECKOUT   their change is in their own copy, not in yours
   RECENT EDIT                their change was in your copy when this session last read it
@@ -162,6 +163,32 @@ def declared_names(text) -> list[str]:
     return list(dict.fromkeys(DECLARATION.findall(text)))
 
 
+BLOB = re.compile(r"^[0-9a-f]{40}$")
+HISTORY_COMMITS = 40  # how far back in this file's Git history to look
+
+
+def git_blob(path: str) -> str | None:
+    """Git's own fingerprint of the file as it is on disk now (works outside a repository too)."""
+    value = git("hash-object", "--", path)
+    return value if BLOB.match(value) else None
+
+
+def history_blobs(path: str) -> set[str]:
+    """Fingerprints of every version of this file in this checkout's Git history (newest 40 commits).
+
+    A teammate's edit whose fingerprint is in this set has already been pulled
+    into this checkout, even if the file here has changed since.
+    """
+    output = git("log", f"-n{HISTORY_COMMITS}", "--no-abbrev", "--raw", "--pretty=format:", "--", path)
+    blobs = set()
+    for line in output.splitlines():
+        fields = line.split()
+        # ":100644 100644 <old blob> <new blob> M <path>"
+        if line.startswith(":") and len(fields) >= 5 and BLOB.match(fields[3]):
+            blobs.add(fields[3])
+    return blobs
+
+
 def count_lines(text) -> int:
     return len(text.splitlines()) if isinstance(text, str) and text else 0
 
@@ -277,12 +304,14 @@ def classify(facts: dict) -> str | None:
     Two separate questions decide it.
       1. Is their change in the file I am about to edit?
          in_my_copy: my file is byte for byte the file they left.
+         in_history: their exact version is in my checkout's Git history (already pulled).
          same_checkout: they edited in this very folder.
       2. Are they still there? working_now: a change in the last 5 minutes by
          someone whose agent has been active in the last 5 minutes.
     """
-    if facts["in_my_copy"]:
-        # I have exactly their version. The only risk is an edit planned from an older read.
+    if facts["in_my_copy"] or facts.get("in_history"):
+        # I have exactly their version, now or in my Git history (I pulled it).
+        # The only risk is an edit planned from an older read.
         return None if facts["read_since"] else "stale"
     if facts["working_now"]:
         return "active"
@@ -348,6 +377,7 @@ def assess(event: dict, path: str, result: dict) -> list[dict]:
         server_now = local_now
     offset = server_now - local_now
     mine_hash, mine_checkout = content_hash(path), checkout_id()
+    pulled = None  # this file's Git history, read once and only if a teammate sent a Git fingerprint
     assessed = []
     for edit in checked_edits(result):
         minutes = minutes_since(edit["edited_at"], server_now)
@@ -357,8 +387,12 @@ def assess(event: dict, path: str, result: dict) -> list[dict]:
         except (ValueError, TypeError):
             has_read = False
         theirs_hash, theirs_checkout = edit.get("content_hash"), edit.get("checkout_id")
+        theirs_blob = edit.get("blob")
+        if isinstance(theirs_blob, str) and BLOB.match(theirs_blob) and pulled is None:
+            pulled = history_blobs(path)
         facts = {
             "in_my_copy": isinstance(theirs_hash, str) and theirs_hash == mine_hash,
+            "in_history": bool(pulled) and theirs_blob in pulled,
             "same_checkout": isinstance(theirs_checkout, str) and theirs_checkout == mine_checkout,
             "working_now": (minutes is not None and minutes <= ACTIVE_MINUTES
                             and isinstance(seen, (int, float)) and seen <= ACTIVE_MINUTES * 60),
@@ -374,7 +408,7 @@ def assess(event: dict, path: str, result: dict) -> list[dict]:
 ADVICE = {
     "active": ("They edited this file recently and their agent was recently active. Your copy differs.",
                "Next: agree with them who changes which part before you edit, or one of you will have to merge by hand."),
-    "stale": ("Their change is already in your copy of this file, but this session read the file before it.",
+    "stale": ("Their change is already in your checkout (your file or your Git history), but this session read the file before it.",
               "Next: read the file again and base the edit on what is there now, or the edit may undo their change."),
     "parallel": ("Their change is in their own copy, not in yours. Reading your file again will not show it.",
                  "Next: get their changes first, or agree who edits which part. Otherwise a merge conflict is forming."),
@@ -533,6 +567,7 @@ def run(event: dict) -> dict | None:
         remember_read(event, path)  # this session wrote it, so it knows what is there
         payload.update(
             session=session_tag(event), checkout_id=checkout_id(), content_hash=content_hash(path),
+            blob=git_blob(path),
             tool=event.get("tool_name"), summary=change_summary(event.get("tool_name"), event.get("tool_input") or {}),
         )
         if me.get("ai_summary") is not False:

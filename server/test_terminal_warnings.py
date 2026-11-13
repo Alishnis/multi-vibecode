@@ -309,6 +309,42 @@ class TerminalWarningsTest(unittest.TestCase):
         client.post("/claims/release", json={"room": "terminal-test", "author": "Ali"})
         self.assertIsNone(self.hook("Mei", path="src/new.py"))        # released: nothing to say
 
+    def git(self, name, *args):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.test", *args],
+                       cwd=self.projects[name], check=True, capture_output=True)
+
+    def test_a_version_already_pulled_into_my_git_history_is_not_work_in_another_checkout(self):
+        self.write("Ali", "v2 from Ali\n")
+        self.hook("Ali", "PostToolUse")                    # the report carries Git's fingerprint of that file
+        self.age_edit("Ali", 12)                           # Ali has moved on: not an active collision
+        sent = self.requests[-1][1]
+        self.assertRegex(sent["blob"], r"^[0-9a-f]{40}$")
+        self.write("Mei", "v1\n")
+        before = self.hook("Mei")["systemMessage"]         # no Git history: it really is in Ali's copy only
+        self.assertIn("WORK IN ANOTHER CHECKOUT", before)
+        # Mei pulls Ali's commit, then keeps working: her file no longer equals Ali's, but her history holds it.
+        self.git("Mei", "init", "-q")
+        self.write("Mei", "v2 from Ali\n")
+        self.git("Mei", "add", "src/todos.py")
+        self.git("Mei", "commit", "-q", "-m", "pulled from Ali")
+        self.write("Mei", "v3, Mei kept working\n")
+        stale = self.hook("Mei")["systemMessage"]
+        self.assertIn("OUTDATED READ", stale)              # their change is in my checkout; I just have not read it
+        self.assertIn("Git history", stale)
+        self.hook("Mei", "PostToolUse", tool="Read")
+        self.assertIsNone(self.hook("Mei"))                # read since: nothing to say
+
+    def test_a_different_version_in_my_history_does_not_count_as_pulled(self):
+        self.write("Ali", "v2 from Ali\n")
+        self.hook("Ali", "PostToolUse")
+        self.age_edit("Ali", 12)
+        self.git("Mei", "init", "-q")
+        self.write("Mei", "an older version\n")
+        self.git("Mei", "add", "src/todos.py")
+        self.git("Mei", "commit", "-q", "-m", "older")
+        self.write("Mei", "v3\n")
+        self.assertIn("WORK IN ANOTHER CHECKOUT", self.hook("Mei")["systemMessage"])
+
     def test_active_collision_becomes_work_in_another_checkout_when_the_teammate_stops(self):
         self.write("Ali", "v2 from Ali\n")
         self.write("Mei", "v1\n")
