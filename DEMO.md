@@ -3,7 +3,7 @@
 ## Before presenting
 
 1. Open [Render health](https://team-contract.onrender.com/health) early. Wait for `{"ok":true}`, then keep the demo dashboard open.
-2. Use a fresh room with two Claude Code sessions named Ali and Teammate. Follow the [setup guide](README.md), approve the project tool, and use Manual mode. In each session, ask “Say ready. Do not record a decision.” Check the dashboard shows both names and an empty contract.
+2. Use a fresh room with two Claude Code sessions named Ali and Teammate. On the dashboard, select **Set team key** and enter a key once, so the conflict buttons appear and the browser tab remembers the key. Follow the [setup guide](README.md), approve the project tool, and use Manual mode. In each session, ask “Say ready. Do not record a decision.” Check the dashboard shows both names and an empty contract.
 3. Rehearse the prompts below and save a local copy of the rehearsal results. Have the backup video ready. If the live agent is silent for 20 seconds, switch to the backup.
 
 ## Five-minute run
@@ -15,7 +15,7 @@
 | 0:50–1:10 | Open the shared dashboard with both people visible. |
 | 1:10–1:50 | Ali records FastAPI on port 18763. Point to the decision as it appears. |
 | 1:50–2:35 | Teammate recalls the framework and port, then proposes Express. Show the conflict card and the saved FastAPI decision. |
-| 2:35–3:00 | Follow the saved decision. Say “Both agents can read the same project decisions before they write code.” |
+| 2:35–3:00 | Select **Keep this** on the conflict card. The card closes and the activity list shows who decided. Say “The agents flag the disagreement before any code is written, and a person settles it in one click.” |
 | 3:00–5:00 | Explain the first customers and proposed pricing. End with the team's ask and describe the scope of the test: two sessions on one Mac, using a hosted server. |
 
 ## Copy and paste prompts
@@ -33,6 +33,8 @@
 > What framework and port did the team choose for the todo backend?
 
 > Propose switching the todo backend to Express through the team-contract tool. Do not write any code.
+
+To show a change of mind instead, select **Switch to this** on a conflict card. Then ask Ali's session “What changed in the team contract since my last prompt?” It should name the retired decision and its replacement.
 
 For an API rehearsal, have Ali also record “GET /todos returns a JSON object containing an items array.” Ask Teammate to propose changing it to a bare JSON array through the tool.
 

@@ -29,12 +29,20 @@ CATEGORIES = ["stack", "api", "data", "convention", "other"]
 INSTRUCTIONS = (
     "This project has a team contract: a shared list of decisions that every "
     "teammate's AI agent reads before it acts. The current contract is added to "
-    "your context on every prompt. Before implementing a plan that affects "
-    "teammates, call check_plan with a short summary of shared assumptions. "
-    "Report contradictions before writing affected code. For a missing team "
-    "agreement, call request_decision using the topic from the review. Tell "
-    "the user to answer it on the dashboard and wait before relying on it. "
-    "Never record your own answer to a pending team decision. "
+    "your context on every prompt. Before implementing a plan that touches "
+    "shared parts of the project (stack, API shapes, shared field names, "
+    "ports), call check_plan with a short summary of the plan. "
+    "If it reports contradictions, stop and tell the user before writing the "
+    "affected code. If it reports missing agreements, those are choices nobody "
+    "has made yet. Keep the user moving: when the choice is part of the task "
+    "the user gave you, make a sensible choice, record it with record_decision "
+    "and continue. The first recorded decision becomes the team's. Call "
+    "request_decision only when the user asks to put a question to the team, "
+    "or when the choice clearly belongs to a teammate's part of the project. "
+    "Open at most two requests for one task, tell the user they are answered "
+    "on the dashboard, and carry on with the work that does not depend on "
+    "them. Never record your own answer to a question that is already open "
+    "for the team. "
     "Whenever you make or accept a project decision that a teammate's agent would "
     "need to know, call record_decision BEFORE writing the code for it. This "
     "includes: choosing a language, framework, library or database; defining an "
@@ -89,8 +97,10 @@ TOOL = {
 PLAN_TOOL = {
     "name": "check_plan",
     "description": (
-        "Review a coding plan before making changes that affect teammates. "
-        "Returns contradictions and missing agreements. A review does not change the contract."
+        "Review a coding plan before making changes that affect teammates. Returns "
+        "contradictions with the team contract (stop and tell the user) and choices the "
+        "team has not made yet (usually: decide, then record_decision). A review does not "
+        "change the contract."
     ),
     "inputSchema": {
         "type": "object",
@@ -102,8 +112,11 @@ PLAN_TOOL = {
 REQUEST_TOOL = {
     "name": "request_decision",
     "description": (
-        "Ask a human to decide a missing shared agreement on the dashboard. "
-        "Reuse the review's topic so teammates share one request. Options are complete decision statements."
+        "Put one question to the whole team, to be answered by a person on the dashboard. "
+        "Use it sparingly: only when the user asks for it, or when the choice belongs to a "
+        "teammate's part of the project. For choices inside your own task, decide and use "
+        "record_decision instead. Reuse the review's topic so teammates share one request. "
+        "Options are complete decision statements."
     ),
     "inputSchema": {
         "type": "object",

@@ -78,9 +78,11 @@ def main() -> None:
         )
     # Repeated on every prompt, because agents forget instructions given once.
     print(
-        "Before a plan that affects teammates, use team-contract check_plan. "
-        "If the review finds a missing shared agreement, use request_decision "
-        "and wait for the dashboard answer before relying on it. "
+        "Before a plan that touches shared parts of the project, use team-contract "
+        "check_plan. A contradiction is raised with the user before code is written. "
+        "A choice the team has not made yet is decided within the user's task and "
+        "recorded; request_decision is only for questions the user wants the whole "
+        "team to answer. Questions listed above as open are not guessed."
     )
     print(
         "New project decisions made in this session (framework, library, database, "

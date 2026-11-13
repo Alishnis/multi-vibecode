@@ -1,6 +1,6 @@
 # Team Contract
 
-Team Contract shares project decisions between Claude Code sessions. Each prompt loads the decisions for your team's room. When Claude proposes a decision that contradicts an existing one, the server logs the conflict and keeps the existing decision in the contract.
+Team Contract shares project decisions between Claude Code sessions. Each prompt loads the decisions for your team's room. When Claude proposes a decision that contradicts an existing one, the server logs the conflict and keeps the existing decision in the contract. A person then settles the conflict on the dashboard, and every teammate's agent is told about the change on its next prompt.
 
 ## Try it on one Mac
 
@@ -39,7 +39,8 @@ The hosted flow has been tested with two independent sessions on one Mac. Setup 
 
 ## Troubleshooting
 
-- **Python reports `CERTIFICATE_VERIFY_FAILED` on macOS.** If `/etc/ssl/cert.pem` exists, prefix the failing command with `SSL_CERT_FILE=/etc/ssl/cert.pem`. For example, run `(cd "$test_dir/ali" && SSL_CERT_FILE=/etc/ssl/cert.pem claude --permission-mode default)`. Use the same prefix for the teammate session and for `install.py` if its connection check fails. This tells Python which trusted certificates to use. For a Python.org installation, you can also run its bundled [Install Certificates.command](https://docs.python.org/3/using/mac.html).
+- **Python reports `CERTIFICATE_VERIFY_FAILED` on macOS.** The client scripts now handle this themselves: when Python has no list of trusted certificates, they use the system's file (`/etc/ssl/cert.pem`). Certificate checking stays on. If you installed before this fix, update your checkout and rerun `install.py`. For a Python.org installation, you can also run its bundled [Install Certificates.command](https://docs.python.org/3/using/mac.html).
+- **Claude says the team contract could not be loaded.** The hook could not reach the server within 3 seconds. Open the server address in a browser to wake it, wait for the dashboard, and send the prompt again. The agent is told about the problem so that it does not guess teammates' decisions.
 - **Claude Code Auto mode denies the recording tool.** Launch the test session with `claude --permission-mode default` and review the tool call in Manual mode. If the MCP server itself is missing, follow the installer's project approval instructions. [Claude Code permission modes](https://code.claude.com/docs/en/permission-modes)
 - **The dashboard is empty after a pause.** Check the room code and confirm the first decision was saved. Render's free service can take about a minute to wake, and the SQLite database can be cleared by spin-down, restart, or deploy. [Render free service limits](https://render.com/docs/free)
 
@@ -47,7 +48,9 @@ The hosted flow has been tested with two independent sessions on one Mac. Setup 
 
 Copy `.env.example` to `.env` and put your OpenRouter API key there to enable conflict checking. Start the server with `sh start_server.sh`, then use `http://127.0.0.1:8000` as the installer URL for both sessions. Keep the server terminal open during the test.
 
-The hosted prototype has no accounts. Anyone who knows the room code can access and change its decisions. Use a fresh room with sample decisions when testing.
+The hosted prototype has no accounts. Anyone who knows the room code can read the room and propose decisions. Changing the contract by hand (answering, settling, retiring, resetting) needs the room's team key, described below. Use a fresh room with sample decisions when testing, and pick a room code that is hard to guess.
+
+The database is one SQLite file. Set `CONTRACT_DB_PATH` to keep it somewhere that survives restarts.
 
 ## Check a plan and request a decision
 
@@ -55,15 +58,34 @@ Update your checkout, rerun the installer for each test project, and restart Cla
 
 1. Ask Claude to check a plan that depends on a shared choice, such as the response shape for `GET /todos`. `check_plan` reports contradictions and missing agreements without changing the contract.
 2. For a missing agreement, ask Claude to use `request_decision` with the topic from the review. Requests with the same topic in a room share one record. Ask from a second session to see it reuse the existing request.
-3. On the dashboard, select **Answer request**, choose a suggested decision or write one, and enter your name and approval token. The answer joins the contract once. A fresh prompt in either project reads it through the existing hook.
+3. On the dashboard, select **Answer request**, choose a suggested decision or write one, and enter your name and the team key. The answer joins the contract once. A fresh prompt in either project reads it through the existing hook.
 
-To enable dashboard approval, set a long random `CONTRACT_APPROVAL_TOKEN` in your local `.env` or in the Render service's environment settings. Share the token with the people who should approve decisions. Keep it out of project files and URLs. When set, the same token is required to reset rooms. It protects approval and reset, while the existing room-code access for reading and proposing decisions still applies.
+## Set the team key
+
+The team key is a password for one room. It is needed for everything a person decides on the dashboard: answering a request, settling a conflict, retiring a decision, resetting the room, and linking a GitHub repository. AI agents never receive it, so an agent cannot approve its own request.
+
+1. Open the dashboard for your room and select **Set team key** at the bottom of the page.
+2. Enter your name and a key of 8 characters or more. Share the key with your teammates outside the project files.
+
+The key can be set once per room. The server stores only a salted hash of it. If the team loses the key, start a new room. The browser remembers the key until the tab is closed.
+
+A server owner can also set `CONTRACT_APPROVAL_TOKEN` in `.env` or in the hosting settings. That one token is accepted in every room, next to each room's own key.
+
+## Change a decision
+
+Decisions are not permanent. Three actions on the dashboard change the contract, and each needs the team key.
+
+- **Settle a conflict.** Each open conflict shows what the AI wanted next to what the team decided. **Keep this** closes the conflict and changes nothing. **Switch to this** retires the old decision and saves the new one in one step. Before switching, the server checks the new decision against the rest of the contract. If it contradicts another decision, nothing changes and the dashboard says which one.
+- **Retire a decision.** Select **Retire** next to a decision to take it out of the contract. If that decision answered a request, the request opens again.
+- **Look at the history.** Retired decisions stay under **Retired decisions**, with who retired them and what replaced them.
+
+On its next prompt, each teammate's agent receives a short list of what was added or retired since it last read the contract, and is asked to say what earlier code has to change.
 
 ## Share code through GitHub
 
 Run the updated installer at the root of each teammate's clone. The optional Git commands need Git and the GitHub CLI (`gh auth login`). Give each teammate access on GitHub.
 
-1. **Link the room once.** From an installed project with an existing GitHub `origin`, run `python3 coord/git_sync.py link` and enter the server approval token. The command reads GitHub's default branch. For a new project with an initial local commit and no `origin`, run `python3 coord/git_sync.py create OWNER/REPO` to create a private GitHub repo, push the current branch's committed history, and link the room. Review that history before running the command. Teammates clone the repo and use the same room code and server URL.
+1. **Link the room once.** From an installed project with an existing GitHub `origin`, run `python3 coord/git_sync.py link` and enter the room's team key. The command reads GitHub's default branch. For a new project with an initial local commit and no `origin`, run `python3 coord/git_sync.py create OWNER/REPO` to create a private GitHub repo, push the current branch's committed history, and link the room. Review that history before running the command. Teammates clone the repo and use the same room code and server URL.
 2. **Work on a task branch.** For example, run `git switch -c ali/todo-api`. Stage the files you want to share and commit them yourself.
 3. **Push and open a draft PR.** Run `python3 coord/git_sync.py publish --title "Add todo API"`. The command pushes your existing commits and opens a draft PR. Run it again after later commits to push to the same branch and reuse the open PR.
 4. **Check for new base-branch commits.** Run `python3 coord/git_sync.py status` to fetch the base branch and report your current branch, open PR, and ahead/behind counts in the dashboard. The timestamp shows when each teammate last checked. After a human reviews and merges a PR, teammates update their own checkouts when ready.
