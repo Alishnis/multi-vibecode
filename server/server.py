@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, BeforeValidator, Field, ValidationError, field_validator
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -1733,16 +1733,30 @@ def health() -> dict:
     return {"ok": True}
 
 
+def stylesheet_version() -> str:
+    return hashlib.sha256((PROJECT_ROOT / "server/design.css").read_bytes()).hexdigest()[:10]
+
+
+def page_html(path: Path) -> HTMLResponse:
+    """A page whose stylesheet address carries a version made from the stylesheet itself.
+
+    A changed stylesheet then has a new address, so no browser can show a page
+    with an old copy of it. (Visitors who opened an earlier version were stuck
+    on an unstyled page until they forced a reload.)
+    """
+    html = path.read_text().replace('href="/design.css"', f'href="/design.css?v={stylesheet_version()}"')
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/", include_in_schema=False)
-def homepage(room: str | None = None) -> FileResponse:
+def homepage(room: str | None = None) -> HTMLResponse:
     # Preserve all previously shared /?room=... links.
-    page = DASHBOARD_PATH if room is not None else PROJECT_ROOT / "server/landing.html"
-    return FileResponse(page, headers={"Cache-Control": "no-store"})
+    return page_html(DASHBOARD_PATH if room is not None else PROJECT_ROOT / "server/landing.html")
 
 
 @app.get("/app", include_in_schema=False)
-def dashboard() -> FileResponse:
-    return FileResponse(DASHBOARD_PATH, headers={"Cache-Control": "no-store"})
+def dashboard() -> HTMLResponse:
+    return page_html(DASHBOARD_PATH)
 
 
 @app.get("/design.css", include_in_schema=False)

@@ -32,12 +32,22 @@ class PagesTest(unittest.TestCase):
 
     def test_both_pages_use_the_shared_stylesheet_and_it_is_always_revalidated(self):
         for address in ("/", "/app"):
-            self.assertIn('href="/design.css"', self.client.get(address).text)
+            self.assertRegex(self.client.get(address).text, r'href="/design\.css\?v=[0-9a-f]{10}"')
         css = self.client.get("/design.css")
         self.assertEqual(css.headers["content-type"].split(";")[0], "text/css")
         self.assertIn("--am-blue", css.text)
         # Without this header a deploy leaves visitors on the old styles.
         self.assertEqual(css.headers["cache-control"], "no-cache")
+
+    def test_the_stylesheet_address_is_made_from_the_stylesheet(self):
+        import hashlib
+        import re
+        expected = hashlib.sha256((server.PROJECT_ROOT / "server/design.css").read_bytes()).hexdigest()[:10]
+        for address in ("/", "/app"):
+            self.assertIn(f"design.css?v={expected}", self.client.get(address).text)
+        with patch.object(server, "stylesheet_version", return_value="0123456789"):   # a new stylesheet, a new address
+            self.assertIn("design.css?v=0123456789", self.client.get("/").text)
+        self.assertEqual(self.client.get(f"/design.css?v={expected}").status_code, 200)
 
     def test_the_dashboard_redraws_claims_when_only_claims_change(self):
         page = self.client.get("/app").text
