@@ -514,12 +514,10 @@
     const guides = {
       setup: {
         title: "Connect your project",
-        intro: "Use Terminal on your Mac or Linux computer. The setup asks for your display name.",
+        intro: "Use Terminal on your Mac or Linux computer. You need Python 3.",
         steps: [
-          ["Get the installer", "Download or clone Team Contract, then open Terminal in the downloaded folder.", null,
-           ["Open Team Contract on GitHub", "https://github.com/Alishnis/multi-vibecode"]],
-          ["Join this room", 'Replace "/path/to/your/project" with your project folder before running this command.',
-           `python3 install.py "/path/to/your/project" --room ${quote(room)} --server ${quote(location.origin)}`],
+          ["Join this room", "Open Terminal inside your project folder and run this. It downloads the Team Contract files from this server, adds them to the folder, and asks for your name.",
+           `d=$(mktemp -d) && curl -fsSL ${quote(location.origin + "/client.zip")} -o "$d/tc.zip" && unzip -q "$d/tc.zip" -d "$d" && python3 "$d/install.py" . --room ${quote(room)} --server ${quote(location.origin)}`],
           ["Connect your GitHub account", "Run this once if you haven’t signed in to the GitHub CLI.", "gh auth login",
            ["Get GitHub CLI", "https://cli.github.com/"]],
         ],

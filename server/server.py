@@ -8,23 +8,41 @@ A page listing every request is generated at http://localhost:8000/docs
 
 import hashlib
 import hmac
+import io
 import json
 import logging
 import os
 import secrets
 import sqlite3
+import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, Header, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, BeforeValidator, Field, ValidationError, field_validator
 
 PROJECT_ROOT = Path(__file__).parent.parent
 DASHBOARD_PATH = Path(__file__).parent / "dashboard.html"
 
 log = logging.getLogger("uvicorn.error")
+
+# What a teammate's computer needs to join a room: the installer and the files
+# it copies into a project. Served as one download, so nobody has to clone
+# this repository first. server/test_client_download.py checks that this list
+# matches the installer's own list.
+CLIENT_FILES = (
+    "install.py",
+    ".claude/settings.json",
+    ".mcp.json",
+    "coord/tc_http.py",
+    "coord/hooks/contract_hook.py",
+    "coord/hooks/file_activity.py",
+    "coord/mcp/server.py",
+    "coord/git_sync.py",
+    "coord/me.example.json",
+)
 
 Category = Literal["stack", "api", "data", "convention", "other"]
 FILE_ACTIVITY_MINUTES = 30
@@ -940,6 +958,20 @@ def record_file_edit(activity: FileActivity) -> dict:
             (activity.room, activity.path, activity.author, activity.branch, now()),
         )
     return {"ok": True}
+
+
+@app.get("/client.zip", include_in_schema=False)
+def client_download() -> Response:
+    """The installer and client scripts in one zip file, always matching this server."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for relative in CLIENT_FILES:
+            archive.write(PROJECT_ROOT / relative, relative)
+    return Response(
+        buffer.getvalue(), media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="team-contract.zip"',
+                 "Cache-Control": "no-store"},
+    )
 
 
 @app.get("/health", include_in_schema=False)

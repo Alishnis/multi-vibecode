@@ -28,12 +28,22 @@ If you already cloned this repository, start inside your existing checkout. Keep
 
 ## Join from another laptop
 
-Run the installer from a checkout of this repository, pointing it at your own project folder. Each teammate uses their own name and the same room code and server URL. Start a fresh Claude Code session in the installed project.
+The quickest way needs no checkout of this repository. Open the room dashboard, select **Connect your project** (or **Setup guide**), and copy the **Join this room** command. Run it in Terminal inside your project folder on a Mac or Linux computer. It downloads the installer and client scripts from the server (`/client.zip`), adds them to the folder, and asks for your name. The files always match the server's version.
+
+```sh
+d=$(mktemp -d) && curl -fsSL 'https://team-contract.onrender.com/client.zip' -o "$d/tc.zip" \
+  && unzip -q "$d/tc.zip" -d "$d" \
+  && python3 "$d/install.py" . --room 'SHARED_ROOM_CODE' --server 'https://team-contract.onrender.com'
+```
+
+You can also run the installer from a checkout of this repository, pointing it at your project folder:
 
 ```sh
 python3 install.py /path/to/project --name YOUR_NAME --room SHARED_ROOM_CODE \
   --server https://team-contract.onrender.com
 ```
+
+Each teammate uses their own name and the same room code and server URL. Start a fresh Claude Code session in the installed project.
 
 The hosted flow has been tested with two independent sessions on one Mac. Setup and connectivity from a second laptop and Windows support are still untested.
 
