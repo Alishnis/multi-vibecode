@@ -188,6 +188,24 @@ A short message that every teammate's agent shows to its user once, before their
 
 The prompt text stays under Claude Code's 10,000-character limit: the contract gets about 6,000 characters, "changed since your last prompt" 1,200, and chat uses what is left.
 
+## Ask a teammate's agent
+
+Send a prompt to a teammate's agent. **Nothing runs until that teammate approves.** The agent's answer comes back to you.
+
+1. **Ask.** In the **Ask a teammate's agent** panel on the dashboard, pick the teammate, write the request and choose *Read only* or *Can edit files*. Or tell Claude: "ask Mei's agent why the login test is flaky, read only". The request stays open for 60 minutes by default (5 to 1,440).
+2. **They are told.** On the teammate's next prompt, their agent is given the request as quoted data, marked **not approved**, and told to show it to its user, say who asks and what, and ask. The agent does nothing with it until the user says yes.
+3. **They approve, in one of two ways.**
+   - *In their chat:* they say yes to their agent, which runs the request and reports with `answer_ask`. The dashboard shows "Approved (chat)", and the agent's report is taken at its word.
+   - *On the dashboard:* they press **Approve**, enter their own name and the team key. Only this kind of approval makes their agent run the request on its next prompt without asking again. The team key is never shown to agents, so an agent cannot give it.
+4. **The answer returns.** When the teammate's agent finishes, it sends a short result. Your agent shows it to you once on your next prompt, and the dashboard lists it.
+
+Good to know:
+
+- **Limits are advice, not locks.** *Read only* tells the teammate's agent not to edit files or run commands that change anything. Claude Code's own permission prompts on their computer still apply, but this tool cannot enforce the limit.
+- **Names are not verified.** The room has no accounts, so anyone who knows the room name can send a request as anyone. That is why a request is never run without the target's yes, and why the agent is told to treat the sender's name and text as data.
+- **Fences.** The teammate must have connected to the room. Nobody may have more than five open requests, and nobody may hold more than five waiting. A sender can cancel a waiting request. An unanswered request expires and the sender is told once.
+- **Not a remote control.** It works through the teammate's next prompt, so it arrives when they next use their agent, not instantly.
+
 ## Get file overlap warnings
 
 Rerun the installer and restart Claude Code in each teammate's project. Use the same room with distinct names. In a linked room, both checkouts must point to the room's GitHub repository.

@@ -229,7 +229,8 @@ class ClaimToolsTest(unittest.TestCase):
 
     def test_the_tools_are_listed_and_explained(self):
         names = [tool["name"] for tool in tools.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]]
-        self.assertEqual(names[-4:-1], ["claim_work", "release_claim", "list_claims"])
+        start = names.index("claim_work")
+        self.assertEqual(names[start:start + 3], ["claim_work", "release_claim", "list_claims"])
         self.assertIn("Before the first file edit of a task, call claim_work", tools.INSTRUCTIONS)
 
 

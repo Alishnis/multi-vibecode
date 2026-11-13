@@ -123,6 +123,21 @@
   .chat-form input { min-width: 0; padding: 10px 14px; color: var(--am-ink); background: var(--am-inset); border: 1px solid var(--am-line-hi); border-radius: 12px; font: 400 14px/1.4 var(--am-font); }
   .chat-form input:focus { outline: 3px solid #cfe0ff; border-color: var(--am-blue); background: #fff; }
 
+  /* requests between agents */
+  .ask-form { display: grid; gap: 10px; }
+  .ask-row { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.3fr) minmax(0, 1.1fr); gap: 8px; }
+  .ask-form input, .ask-form select, .ask-form textarea {
+    width: 100%; min-width: 0; padding: 10px 12px; color: var(--am-ink); background: var(--am-inset);
+    border: 1px solid var(--am-line-hi); border-radius: 12px; font: 400 14px/1.45 var(--am-font);
+  }
+  .ask-form textarea { resize: vertical; }
+  .ask-form input:focus, .ask-form select:focus, .ask-form textarea:focus { outline: 3px solid #cfe0ff; border-color: var(--am-blue); background: #fff; }
+  .ask-form .control { justify-self: start; }
+  #asks { display: grid; gap: 8px; max-height: 420px; overflow-y: auto; margin: 12px 0; }
+  .ask-result { margin-top: 8px; padding: 10px 12px; background: #fff; border: 1px solid var(--am-line); border-radius: 12px; color: var(--am-ink); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+  .ask-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .am-chip.ember { background: var(--am-ember-soft); border-color: var(--am-ember-line); color: var(--am-ember); }
+
   /* conflicts */
   .conflict { margin-bottom: 12px; padding: 18px; background: #fff; border: 1px solid var(--am-ember-line); border-radius: 20px; }
   .conflict:last-child { margin-bottom: 0; }
@@ -219,6 +234,7 @@
     .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 640px) {
+    .ask-row, .chat-form { grid-template-columns: minmax(0, 1fr); }
     .page, .am-bar { width: calc(100% - 28px); }
     .page { padding-top: 28px; }
     .panel, .workspace { padding: 20px; }
@@ -238,6 +254,7 @@
     <a href="#overview" aria-current="location">overview</a>
     <a href="#claim-panel">claims</a>
     <a href="#chat-panel">chat</a>
+    <a href="#ask-panel">requests</a>
     <a href="#git-panel">github</a>
     <a href="#contract">decisions</a>
     <a href="#file-panel">edits</a>
@@ -315,6 +332,22 @@
         <button class="control primary" id="chat-send" type="submit">Send</button>
       </form>
       <p id="chat-error" class="form-error" role="alert" hidden></p>
+    </section>
+    <section class="panel" id="ask-panel">
+      <h2>Ask a teammate's agent</h2>
+      <p class="meta">Send a prompt to a teammate's agent. Nothing runs until they approve, here or in their own chat. Their agent answers back.</p>
+      <ul id="asks" aria-live="polite"></ul>
+      <p id="ask-hint" class="hint" hidden>Set a team key (bottom of the page) to approve requests here. A teammate can also approve in their own chat with their agent.</p>
+      <form id="ask-form" class="ask-form">
+        <div class="ask-row">
+          <input id="ask-name" required maxlength="50" placeholder="Your name" autocomplete="name" aria-label="Your name">
+          <select id="ask-to" required aria-label="Teammate"><option value="">Teammate…</option></select>
+          <select id="ask-mode" aria-label="What their agent may do"><option value="read">Read only</option><option value="edit">Can edit files</option></select>
+        </div>
+        <textarea id="ask-prompt" required maxlength="800" rows="3" placeholder="What should their agent do? Example: can you look at why the login test is flaky on your branch? No changes, just tell me what you find." aria-label="Request"></textarea>
+        <button class="control primary" id="ask-send" type="submit">Send for approval</button>
+      </form>
+      <p id="ask-error" class="form-error" role="alert" hidden></p>
     </section>
     <section class="panel" id="file-panel">
       <h2>Recent file edits</h2>
@@ -947,6 +980,93 @@
     if (atBottom) list.scrollTop = list.scrollHeight;
   }
 
+  const askStatus = {
+    pending: ["Waiting for approval", "amber"], approved: ["Approved", "blue"], done: ["Done", "green"],
+    declined: ["Declined", "ember"], expired: ["Expired", ""], cancelled: ["Cancelled", ""],
+  };
+
+  function renderAsks(asks) {
+    const list = $("asks");
+    list.replaceChildren();
+    $("ask-hint").hidden = approvalEnabled || !(asks || []).some((a) => a.status === "pending");
+    for (const ask of asks || []) {
+      const row = el("li", "msg ask");
+      const head = el("div", "who-line");
+      const [label, tone] = askStatus[ask.status] || [ask.status, ""];
+      head.append(avatar(ask.from), el("strong", null, `${ask.from} → ${ask.to}`),
+                  el("span", `am-chip ${tone}`, ask.status === "approved" && ask.via ? `${label} (${ask.via})` : label),
+                  el("span", "am-chip", ask.can_edit ? "may edit files" : "read only"), timeSpan(ask.created_at));
+      row.append(head, el("div", "msg-text", ask.prompt));
+      if (ask.result) {
+        const result = el("div", "ask-result");
+        result.append(el("strong", null, `${ask.to}'s agent: `), document.createTextNode(ask.result));
+        row.append(result);
+      }
+      if (ask.status === "pending") {
+        const actions = el("div", "ask-actions");
+        if (approvalEnabled) {
+          for (const [action, text, tone2] of [["approve", "Approve", "answer-primary"], ["decline", "Decline", ""]]) {
+            const button = el("button", `action small ${tone2}`.trim(), text);
+            button.type = "button";
+            button.addEventListener("click", () => askHuman({
+              title: action === "approve" ? `Approve this request for ${ask.to}'s agent?` : "Decline this request?",
+              text: action === "approve"
+                ? `${ask.to}'s agent will be told to run this (${ask.can_edit ? "it may edit files" : "read only"}): ${ask.prompt} Enter ${ask.to}'s name and the team key.`
+                : `${ask.from} is told it was declined. Enter ${ask.to}'s name and the team key.`,
+              button: text,
+              run: ({author, key}) => send(`/asks/${ask.id}/answer`, {room, author, action}, key),
+            }));
+            actions.append(button);
+          }
+        }
+        if (savedName() === ask.from) {
+          const cancel = el("button", "action small retire", "Cancel request");
+          cancel.type = "button";
+          cancel.addEventListener("click", async () => {
+            try { await send(`/asks/${ask.id}/answer`, {room, author: ask.from, action: "cancel"}); tick(); } catch (error) { alert(error.message); }
+          });
+          actions.append(cancel);
+        }
+        if (actions.children.length) row.append(actions);
+      }
+      list.append(row);
+    }
+    if (!(asks || []).length) list.append(el("li", "empty", "No requests yet."));
+  }
+
+  // The teammate list for the request form changes rarely; keep the chosen person when it is redrawn.
+  function renderAskTargets(people) {
+    const select = $("ask-to");
+    const names = people.map((p) => p.name).join("\n");
+    if (select.dataset.names === names) return;
+    select.dataset.names = names;
+    const chosen = select.value;
+    select.replaceChildren(new Option("Teammate…", ""), ...people.map((p) => new Option(p.name, p.name)));
+    select.value = people.some((p) => p.name === chosen) ? chosen : "";
+  }
+
+  $("ask-name").value = savedName();
+  $("ask-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const author = $("ask-name").value.trim();
+    const to = $("ask-to").value;
+    const prompt = $("ask-prompt").value.trim();
+    if (!author || !to || !prompt || $("ask-send").disabled) return;
+    $("ask-error").hidden = true;
+    $("ask-send").disabled = true;
+    try {
+      await send("/asks", {room, author, to, prompt, can_edit: $("ask-mode").value === "edit"});
+      remember(author);
+      $("ask-prompt").value = "";
+      tick();
+    } catch (error) {
+      $("ask-error").textContent = error.message;
+      $("ask-error").hidden = false;
+    } finally {
+      $("ask-send").disabled = false;
+    }
+  });
+
   let knownPeople = [];
   $("chat-name").value = savedName();
   $("chat-form").addEventListener("submit", async (event) => {
@@ -1046,6 +1166,12 @@
     if ($("messages").dataset.signature !== messagesSignature) {
       renderMessages(state.messages);
       $("messages").dataset.signature = messagesSignature;
+    }
+    renderAskTargets(knownPeople);
+    const asksSignature = JSON.stringify([state.asks ?? [], approvalEnabled]);
+    if ($("asks").dataset.signature !== asksSignature) {
+      renderAsks(state.asks);
+      $("asks").dataset.signature = asksSignature;
     }
     renderPeople(state.people || []);
     $("active-total").textContent = (state.people || []).filter((person) => person.seconds_ago < ACTIVE_SECONDS).length;
