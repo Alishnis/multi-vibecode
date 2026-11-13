@@ -140,6 +140,15 @@ def create_repository(me: dict, repo: str) -> None:
     link(me, origin_repository(), token)
 
 
+def edited_names(status_lines: list[str], limit: int = 3) -> str:
+    """File names from `git status --porcelain` lines, for a short notice."""
+    # Each line is two status letters, then the path. command() trims the
+    # output, so the first line may have lost its leading space.
+    names = ", ".join(line[2:].strip() for line in status_lines[:limit])
+    extra = len(status_lines) - limit
+    return names + (f" and {extra} more" if extra > 0 else "")
+
+
 def open_pr(repo: str, branch: str, base: str) -> dict | None:
     if branch == base:
         return None
@@ -154,10 +163,14 @@ def publish(repo: str, branch: str, base: str, ahead: int, title: str | None, re
     if branch == base:
         raise ValueError(f"Switch to a task branch before publishing. {base} is the review target.")
     if ahead == 0:
-        raise ValueError("There are no new commits to share. Commit the changes you want to publish, then try again.")
+        unsaved = command("git", "status", "--porcelain").splitlines()
+        hint = f" You have uncommitted edits ({edited_names(unsaved)})." if unsaved else ""
+        raise ValueError(f"There are no new commits to share.{hint} Commit the changes you want to publish, then try again.")
     pr = open_pr(repo, branch, base)
-    if command("git", "status", "--porcelain"):
-        notice("You have uncommitted edits. This push includes your saved commits only.")
+    unsaved = command("git", "status", "--porcelain").splitlines()
+    if unsaved:
+        notice(f"Not shared, because they are not committed: {edited_names(unsaved)}. "
+               "This push includes your saved commits only.")
     try:
         command(
             "git", "push", "--set-upstream", "--no-follow-tags", "--recurse-submodules=no", "origin",
@@ -367,10 +380,7 @@ def update_checkout(base: str, target: str) -> str:
     # the update if one of them would be overwritten.
     edits = command("git", "status", "--porcelain", "--untracked-files=no", "--ignore-submodules=none").splitlines()
     if edits:
-        # Each line is two status letters, then the path. command() trims the
-        # output, so the first line may have lost its leading space.
-        names = ", ".join(line[2:].strip() for line in edits[:3]) + (f" and {len(edits) - 3} more" if len(edits) > 3 else "")
-        return (f"Sync paused: you have unsaved edits on {base} ({names}). "
+        return (f"Sync paused: you have unsaved edits on {base} ({edited_names(edits)}). "
                 f"Run {CLI} start my-task to move them to a task branch.")
     ahead, behind = map(int, command(
         "git", "rev-list", "--left-right", "--count", f"HEAD...{target}",

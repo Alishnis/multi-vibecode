@@ -95,6 +95,19 @@ On its next prompt, each teammate's agent receives a short list of what was adde
 
 Run the updated installer for each teammate's clone. The room dashboard has copyable commands under **Connect your project**, **Share changes**, and **Sync updates**. Run them in Terminal on your computer. The Git commands need Git and the GitHub CLI (`gh auth login`). Give each teammate access on GitHub.
 
+### Ask Claude Code instead of typing commands
+
+Once the room is linked to GitHub, you can stay inside Claude Code. The `team-contract` tool server has four Git tools, and Claude uses them when you ask in plain words. Claude Code asks you to approve each tool call.
+
+| You say | Claude uses | What happens |
+| --- | --- | --- |
+| “Start a task for the delete endpoint.” | `start_task` | Creates a task branch from the latest shared code. Work you already began on the shared branch comes along. |
+| “Share my work.” | `share_work` | Claude commits the files for the task, pushes the branch, and opens or updates one pull request. You get the link. |
+| “Get the latest code.” | `get_latest` | Applies approved, merged work when you are on the shared branch with no unsaved edits. Otherwise it says why nothing changed. |
+| “Where does my branch stand?” | `branch_status` | Reports commits ahead and behind and the review status, and updates the dashboard. |
+
+These tools run the same `coord/git_sync.py` commands described below, so the terminal and Claude behave the same way. Linking a room, reviewing, and merging stay with people. After updating, rerun the installer in each project and restart Claude Code so it loads the new tools.
+
 1. **Link the room once.** From an installed project with an existing GitHub `origin`, run `python3 coord/git_sync.py link` and enter the room's team key. The command reads GitHub's default branch. For a new project with an initial local commit and no `origin`, run `python3 coord/git_sync.py create OWNER/REPO` to create a private GitHub repo, push the current branch's committed history, and link the room. Review that history before running the command. Teammates clone the repo and use the same room code and server URL.
 2. **Start a task.** Run `python3 coord/git_sync.py start ali/todo-api` to create a branch from the latest shared code. Make your edits and commit the files you want to share using your editor’s Source Control panel or Git. If you already began on the shared branch, run `start` anyway: unsaved edits and commits you made there move to the new task branch, and your local shared branch goes back to match GitHub.
 3. **Share it for review.** Run `python3 coord/git_sync.py publish --ready`. This pushes your commits, opens or updates one pull request, and prints the review link. Add `--title "Add todo API"` to name a new pull request. Use `publish` on its own to open a new pull request as a draft.

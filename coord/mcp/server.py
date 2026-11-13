@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MCP tools for reviewing plans and sharing team decisions.
+"""MCP tools for sharing team decisions, reviewing plans, and sharing code.
 
 Claude Code starts this script (see .mcp.json) and talks to it over stdin and
 stdout, one JSON message per line. This is the MCP "stdio" protocol.
@@ -11,6 +11,7 @@ to stderr.
 """
 
 import json
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -25,6 +26,8 @@ except ImportError:  # an older install without coord/tc_http.py
 ME_FILE = Path(__file__).resolve().parent.parent / "me.json"  # coord/me.json
 TIMEOUT_SECONDS = 30  # generous: the server asks an AI model to check each decision
 CATEGORIES = ["stack", "api", "data", "convention", "other"]
+GIT_HELPER = Path(__file__).resolve().parent.parent / "git_sync.py"  # coord/git_sync.py
+GIT_TIMEOUT_SECONDS = 150  # a push plus opening a pull request can take a while
 
 INSTRUCTIONS = (
     "This project has a team contract: a shared list of decisions that every "
@@ -53,7 +56,19 @@ INSTRUCTIONS = (
     "record_decision with what they asked for: the server logs the conflict so "
     "the whole team sees it. Then stop and ask the user how to proceed. "
     "Do not record a decision that is already in the contract, and do not record "
-    "small local details such as a helper function's name."
+    "small local details such as a helper function's name. "
+    "Sharing code: when the room is linked to GitHub, four tools handle Git for "
+    "the user, so they never need the terminal. Use them only when the user asks. "
+    "start_task: the user wants to begin a new piece of work. share_work: the "
+    "user wants teammates to see or review their work; first commit the files "
+    "that belong to the task with git, then call it. get_latest: the user wants "
+    "the newest code from the team. branch_status: the user asks where their "
+    "branch or pull request stands. Tell the user in plain words what happened "
+    "and give them the pull request link when there is one. The tools' replies "
+    "may mention terminal commands (python3 coord/git_sync.py start, publish, "
+    "watch, status); those are the same actions as start_task, share_work, "
+    "get_latest and branch_status. Reviewing and merging pull requests, and "
+    "linking a room to a repository, are done by people, never by you."
 )
 
 TOOL = {
@@ -128,6 +143,93 @@ REQUEST_TOOL = {
         },
         "required": ["topic", "category", "question", "options"],
     },
+}
+
+
+START_TOOL = {
+    "name": "start_task",
+    "description": (
+        "Begin a new task for the user: creates a task branch from the team's latest "
+        "shared code and switches to it. Call it when the user says they want to start "
+        "working on something new. Unsaved edits and commits already made on the shared "
+        "branch come along to the new branch, so it is safe to call after work has begun. "
+        "Nothing is sent to GitHub."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": (
+                    "A short, unique branch name: the user's name, a slash, and the topic "
+                    "in lowercase with dashes. Example: 'ali/todo-delete'."
+                ),
+            },
+        },
+        "required": ["name"],
+    },
+}
+
+SHARE_TOOL = {
+    "name": "share_work",
+    "description": (
+        "Share the user's committed work with the team: pushes the task branch to GitHub "
+        "and opens a pull request, or updates the one that is already open. Call it when "
+        "the user asks to share, publish or send their work for review. Only commits are "
+        "shared, so first commit the files that belong to this task with git (stage the "
+        "specific files; leave out secrets and unrelated files). If the reply says the "
+        "current branch is the shared branch, call start_task and then share_work again. "
+        "The reply includes the pull request link: give it to the user."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "maxLength": 120,
+                "description": "Title for a new pull request, in plain words. Default: the last commit message.",
+            },
+            "draft": {
+                "type": "boolean",
+                "description": "true = open it as a draft because the work is not ready for review. Default false.",
+            },
+        },
+    },
+}
+
+LATEST_TOOL = {
+    "name": "get_latest",
+    "description": (
+        "Bring the team's newest merged work into the user's copy of the shared branch. "
+        "Call it when the user asks for the latest code or to sync. It checks GitHub once "
+        "and updates only when that is safe: the user is on the shared branch and has no "
+        "unsaved edits to tracked files. It never overwrites the user's work; the reply "
+        "says what was applied or why nothing was."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "include_unapproved": {
+                "type": "boolean",
+                "description": (
+                    "false (default) = only pull requests that a teammate approved. "
+                    "true = every merged pull request. Use true when the reply says newer "
+                    "commits were left alone and the user confirms they want them."
+                ),
+            },
+        },
+    },
+}
+
+STATUS_TOOL = {
+    "name": "branch_status",
+    "description": (
+        "Report where the user's current branch stands: how many commits it is ahead of "
+        "and behind the shared branch, and its pull request and review status. Also "
+        "updates the team dashboard. Call it when the user asks about their branch or "
+        "pull request. Changes no files."
+    ),
+    "inputSchema": {"type": "object", "properties": {}},
 }
 
 
@@ -221,10 +323,64 @@ def request_decision(arguments: dict) -> str:
     return f"{state}: request #{request['id']}, {request['question']} Wait for a human to answer on the dashboard."
 
 
+def run_git_helper(*args: str) -> str:
+    """Run coord/git_sync.py and return what it printed.
+
+    The helper is the same program people run in a terminal, so the agent and
+    the terminal can never behave differently. Its output is captured: this
+    script's own stdout is reserved for protocol messages.
+    """
+    if not GIT_HELPER.is_file():
+        raise ValueError("coord/git_sync.py is missing. Rerun the Team Contract installer.")
+    try:
+        run = subprocess.run(
+            [sys.executable, str(GIT_HELPER), *args],
+            capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, stdin=subprocess.DEVNULL,
+        )
+    except subprocess.TimeoutExpired:
+        raise ValueError("The Git step took too long and was stopped. Check the network, then try again.") from None
+    output = "\n".join(part.strip() for part in (run.stdout, run.stderr) if part.strip())
+    if run.returncode:
+        raise ValueError(output or "The Git step failed.")
+    return output or "Done."
+
+
+def start_task(arguments: dict) -> str:
+    name = str(arguments.get("name", "")).strip()
+    if not name or name.startswith("-"):
+        raise ValueError("Give the task a short name, for example ali/todo-delete.")
+    return run_git_helper("start", name)
+
+
+def share_work(arguments: dict) -> str:
+    args = ["publish"]
+    if not arguments.get("draft"):
+        args.append("--ready")
+    title = " ".join(str(arguments.get("title") or "").split())
+    if title:
+        args.append(f"--title={title}")
+    return run_git_helper(*args)
+
+
+def get_latest(arguments: dict) -> str:
+    args = ["watch", "--once"]
+    if arguments.get("include_unapproved"):
+        args.append("--any-merge")
+    return run_git_helper(*args)
+
+
+def branch_status(arguments: dict) -> str:
+    return run_git_helper("status")
+
+
 TOOLS = {
     "record_decision": (TOOL, record_decision),
     "check_plan": (PLAN_TOOL, check_plan),
     "request_decision": (REQUEST_TOOL, request_decision),
+    "start_task": (START_TOOL, start_task),
+    "share_work": (SHARE_TOOL, share_work),
+    "get_latest": (LATEST_TOOL, get_latest),
+    "branch_status": (STATUS_TOOL, branch_status),
 }
 
 
@@ -244,7 +400,7 @@ def handle(message: dict) -> dict | None:
             {
                 "protocolVersion": params.get("protocolVersion", "2024-11-05"),
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "team-contract", "version": "0.1.0"},
+                "serverInfo": {"name": "team-contract", "version": "0.2.0"},
                 "instructions": INSTRUCTIONS,
             }
         )
