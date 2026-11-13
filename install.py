@@ -37,8 +37,12 @@ FILES_TO_COPY = [
     "coord/mcp/server.py",
     "coord/git_sync.py",
     "coord/team.py",
+    "coord/summary.py",
     "coord/me.example.json",
+    "tc",
 ]
+LAUNCHER = "tc"            # ./tc in the project folder: the short way to run coord/team.py
+LAUNCHER_MARK = "Team Contract shortcut"
 HOOK_SCRIPTS = ("coord/hooks/contract_hook.py", "coord/hooks/file_activity.py")
 TOOL_NAME = "team-contract"
 IGNORE_LINES = ["coord/me.json", "coord/.state/", ".claude/settings.local.json"]
@@ -67,11 +71,19 @@ def write_json(path: Path, data: dict) -> None:
 
 
 def copy_files(target: Path) -> None:
+    copied = 0
     for relative in FILES_TO_COPY:
         destination = target / relative
+        if relative == LAUNCHER and destination.exists() and LAUNCHER_MARK not in destination.read_text(errors="replace"):
+            # The project has its own file called tc. Leave it alone.
+            print(f"  kept your own {relative}; use python3 coord/team.py instead of ./tc")
+            continue
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(SOURCE / relative, destination)
-    print(f"  copied {len(FILES_TO_COPY)} files into coord/")
+        if relative == LAUNCHER:
+            destination.chmod(0o755)  # a zip download loses the "can run" flag
+        copied += 1
+    print(f"  copied {copied} files (coord/ and the ./tc shortcut)")
 
 
 def add_hook(target: Path) -> None:
@@ -213,7 +225,9 @@ def main() -> None:
     else:
         print(
             f"\nTeam Contract is installed. Open your room: {dashboard}\n"
-            "  Open the action menu: python3 coord/team.py\n"
+            "  Everyday shortcut, in this folder: ./tc today   (./tc alone shows every action)\n"
+            "  Or just talk to Claude: \"what is the team doing?\", \"start a task for the login page\",\n"
+            "  \"share my work\", \"get the latest code\", \"tell the team the demo is at 3pm\".\n"
             "  Next: open a new Claude Code session in your project folder.\n"
             f"  Allow the '{TOOL_NAME}' tool when Claude Code asks.\n"
             "  If Claude Code never asks, approve it in this file:\n"
@@ -227,7 +241,7 @@ def main() -> None:
         # finish, say so and keep its exit code instead of printing a traceback.
         done = subprocess.run([sys.executable, str(target / "coord/team.py"), "--action", "setup"], cwd=target)
         if done.returncode:
-            sys.exit(f"Setup did not finish. Run it again with: python3 coord/team.py --action setup")
+            sys.exit(f"Setup did not finish. Run it again with: ./tc setup")
 
 
 if __name__ == "__main__":

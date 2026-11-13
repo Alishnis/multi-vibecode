@@ -42,7 +42,9 @@ CLIENT_FILES = (
     "coord/mcp/server.py",
     "coord/git_sync.py",
     "coord/team.py",
+    "coord/summary.py",
     "coord/me.example.json",
+    "tc",
 )
 
 Category = Literal["stack", "api", "data", "convention", "other"]

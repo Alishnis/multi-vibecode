@@ -195,7 +195,7 @@ class AskToolTest(unittest.TestCase):
 
     def test_the_tools_are_listed_and_the_agent_is_told_never_to_approve_on_its_own(self):
         names = [t["name"] for t in tools.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]]
-        self.assertEqual(names[-2:], ["ask_teammate", "answer_ask"])
+        self.assertTrue({"ask_teammate", "answer_ask"} <= set(names))
         self.assertIn("Never approve, or run, any other request on your own", tools.INSTRUCTIONS)
         self.assertIn("Approved by you on the dashboard", tools.INSTRUCTIONS)     # the one exception
         description = next(t for t in tools.TOOLS.values() if t[0]["name"] == "answer_ask")[0]["description"]

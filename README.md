@@ -2,6 +2,39 @@
 
 Team Contract shares project decisions between Claude Code sessions. Each prompt loads the decisions for your team's room. When Claude proposes a decision that contradicts an existing one, the server logs the conflict and keeps the existing decision in the contract. A person then settles the conflict on the dashboard, and every teammate's agent is told about the change on its next prompt.
 
+## Start here
+
+You only need to type one command, once. After that, talk to Claude, or use the short `./tc` shortcut.
+
+**1. Join** (once per computer): open the [homepage](https://team-contract.onrender.com/), pick a room name, copy the command, and paste it into Terminal inside your project folder. A teammate can also send you the ready-made message from the dashboard's **Copy invite** button.
+
+**2. Just ask Claude.** These all work in plain words:
+
+| Say to Claude | What happens |
+| --- | --- |
+| "what is the team doing?" | A plain summary: what needs you, who is working on what, the latest messages, and one next step. |
+| "start a task for the login page" | Claude starts a task branch from the team's latest code. |
+| "share my work" | Claude commits the task's files, checks them against the team's decisions, and opens a pull request. You get the link. |
+| "get the latest code" | Merged work comes into your copy, only when that is safe. |
+| "tell the team the demo is at 3pm" | A chat message every teammate's agent shows once. |
+| "ask Mei's agent why the login test fails, read only" | A request that runs only after Mei says yes. |
+
+Claude also claims files before editing and warns you before an edit that would collide with a teammate's. You do not have to ask for those.
+
+**3. Or use `./tc`** in Terminal, inside the project folder:
+
+| Type | What it does |
+| --- | --- |
+| `./tc today` | The same plain summary as above, ending with one next step. |
+| `./tc work` | Opens Claude, and keeps your shared branch updated if you chose that during setup. |
+| `./tc start` | Asks for the task in plain words and makes the branch name for you. |
+| `./tc share` / `./tc sync` | Share your saved work; get the team's latest code. |
+| `./tc` | A numbered menu with everything else. You can type a number or a word. |
+
+`./tc help` lists every word. `./tc` is a two-line script that runs `python3 coord/team.py`; on Windows, or if your project already has its own file called `tc` (the installer never overwrites it), run `python3 coord/team.py` with the same words instead.
+
+**On the dashboard**, a **Get your team set up** list ticks itself off as you go: connect your project, set a team key, invite a teammate, connect GitHub, make the first decision. Each open step has a button that does it or shows how.
+
 ## Guided setup — one command
 
 Open [Team Contract](https://team-contract.onrender.com/), choose your room and name, and copy the setup command. Run it inside your project folder on Mac or Linux:
@@ -14,13 +47,13 @@ Python 3 and curl are prerequisites. Setup installs the Team Contract files and 
 
 Choose whether automatic sync should run while your workspace is open. Setup saves that preference, checks the installation, and offers to open the dashboard and Claude. Claude login, project trust, and agent permissions still require your interaction.
 
-For every later session, run:
+For every later session, run this in the project folder:
 
 ```sh
-python3 coord/team.py --action work
+./tc work
 ```
 
-This opens Claude and the dashboard, and runs the Git watcher if you enabled it. The watcher stops when Claude exits; its messages are saved in `coord/.state/sync.log`. Only clean shared branches receive merged PR updates. To change preferences, run `python3 coord/team.py --action setup`. For the numbered action menu, run `python3 coord/team.py`.
+This opens Claude and the dashboard, and runs the Git watcher if you enabled it. The watcher stops when Claude exits; its messages are saved in `coord/.state/sync.log`. Only clean shared branches receive merged PR updates. To change preferences, run `./tc setup`. For the numbered menu, run `./tc`.
 
 The website copies the command; it does not execute commands on your computer. Re-run setup to upgrade an existing project, then restart Claude. Your name, room, privacy preferences, and unrelated agent settings are preserved.
 
@@ -274,8 +307,8 @@ Local automated check (uses two temporary installed clients and a local server, 
 
 ## One command for everyday actions
 
-After joining a project, run `python3 coord/team.py`. Choose a number to start a task, share committed work, get latest code, keep syncing, check branch status, see reserved files, release your own reservations, check setup, open the dashboard, or open Claude. Press Ctrl+C while watching to return to the menu. Sharing still requires committed changes. No command auto-commits all your files.
+After joining a project, run `./tc` (the same as `python3 coord/team.py`). Choose a number to start a task, share committed work, get latest code, keep syncing, check branch status, see reserved files, release your own reservations, check setup, open the dashboard, or open Claude. Press Ctrl+C while watching to return to the menu. Sharing still requires committed changes. No command auto-commits all your files.
 
-For a setup check without opening the menu, run `python3 coord/team.py --action doctor`. It checks client files, hook registration, the agent connection, installed tools, GitHub login and server reachability. It does not prove that an agent has approved the hooks; test that in a fresh Claude session.
+For a setup check without opening the menu, run `./tc doctor`. It checks client files, hook registration, the agent connection, installed tools, GitHub login and server reachability. It does not prove that an agent has approved the hooks; test that in a fresh Claude session.
 
-The dashboard's **Action menu** button copies the launcher command. Browser buttons do not execute arbitrary terminal commands. The existing one-line Join command installs the menu too.
+The dashboard's **Terminal shortcuts** button shows the `./tc` words with copy buttons. Browser buttons do not execute arbitrary terminal commands. The existing one-line Join command installs the menu too.

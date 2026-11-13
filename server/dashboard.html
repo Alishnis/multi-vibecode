@@ -113,6 +113,22 @@
   .who-line .am-avatar { width: 22px; height: 22px; font-size: 10px; }
   .who-line code { background: #fff; border: 1px solid var(--am-line); border-radius: 8px; padding: 1px 8px; }
 
+  /* setup checklist */
+  .checklist { margin-bottom: 18px; padding: 26px 30px; background: #fff; border: 1px solid var(--am-blue-line); border-radius: 28px; box-shadow: var(--am-shadow-card); }
+  .checklist-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .checklist-head h2 { margin: 0 0 2px; }
+  .progress { height: 8px; margin: 14px 0 18px; background: var(--am-blue-soft); border-radius: 999px; overflow: hidden; }
+  .progress span { display: block; height: 100%; width: 0; background: var(--am-grad-blue); border-radius: inherit; transition: width .4s var(--am-ease); }
+  #checklist-steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  #checklist-steps li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 14px; background: var(--am-inset); border-radius: 16px; }
+  #checklist-steps li.next { background: var(--am-blue-soft); }
+  #checklist-steps strong { color: var(--am-ink); font-weight: 600; }
+  #checklist-steps .hint { margin: 2px 0 0; }
+  .tick { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: #fff; border: 1px solid var(--am-line-hi); color: var(--am-quiet); font-weight: 700; }
+  li.done .tick { background: var(--am-green-soft); border-color: #c5ead4; color: var(--am-green-ink); }
+  li.done strong { color: var(--am-quiet); }
+  li.next .tick { background: var(--am-grad-blue); border: 0; color: #fff; }
+
   /* team chat */
   #messages { display: grid; gap: 8px; max-height: 340px; overflow-y: auto; margin: 12px 0; padding-right: 2px; }
   .msg { padding: 12px 14px; background: var(--am-inset); border-radius: 16px; }
@@ -235,6 +251,9 @@
   }
   @media (max-width: 640px) {
     .ask-row, .chat-form { grid-template-columns: minmax(0, 1fr); }
+    #checklist-steps li { grid-template-columns: 34px minmax(0, 1fr); }
+    #checklist-steps li > button { grid-column: 2; justify-self: start; }
+    .checklist { padding: 20px; }
     .page, .am-bar { width: calc(100% - 28px); }
     .page { padding-top: 28px; }
     .panel, .workspace { padding: 20px; }
@@ -266,10 +285,20 @@
     <div><p class="eyebrow">Your room</p><h1 id="room"></h1></div>
     <div class="header-actions">
       <span class="live" id="live"><span class="dot"></span><span id="live-text">Connecting</span></span>
+      <button type="button" class="control primary" id="copy-invite">Copy invite</button>
       <button type="button" class="control" id="copy-room">Copy room link</button>
       <span id="room-copy-status" class="copy-feedback" role="status"></span>
     </div>
   </header>
+
+  <section class="checklist" id="checklist" aria-labelledby="checklist-title" hidden>
+    <div class="checklist-head">
+      <div><h2 id="checklist-title">Get your team set up</h2><p class="meta" id="checklist-progress"></p></div>
+      <button type="button" class="action small retire" id="checklist-hide">Hide</button>
+    </div>
+    <div class="progress" aria-hidden="true"><span id="checklist-bar"></span></div>
+    <ol id="checklist-steps"></ol>
+  </section>
 
   <section class="workspace" aria-labelledby="workspace-title">
     <div>
@@ -279,7 +308,7 @@
     <div class="workspace-actions">
       <button type="button" class="control primary" data-guide="setup" id="setup-guide">Connect your project</button>
       <button type="button" class="control" data-guide="publish" id="publish-guide" hidden>Share changes</button>
-      <button type="button" class="control" data-guide="menu">Action menu</button>
+      <button type="button" class="control" data-guide="menu">Terminal shortcuts</button>
       <button type="button" class="control" data-guide="sync" id="sync-guide" hidden>Sync updates</button>
     </div>
   </section>
@@ -453,6 +482,28 @@
     copyText(url.href, $("room-copy-status"), "Copy the room link from your address bar.");
   });
 
+  // Quote a value for the macOS/Linux shell, including embedded quotes.
+  const shellQuote = (value) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+
+  // A message to paste into a chat app: why, then the one command, then the dashboard.
+  function inviteText() {
+    const dashboard = `${location.origin}/app?${new URLSearchParams({room})}`;
+    return [
+      `Join our Team Contract room "${room}", so our coding agents share decisions and warn each other before editing the same files.`,
+      "",
+      "1. Open Terminal in your copy of the project folder.",
+      "2. Paste this and answer the questions:",
+      `   curl -fsSL ${shellQuote(location.origin + "/install.sh")} | bash -s -- --room ${shellQuote(room)} --server ${shellQuote(location.origin)}`,
+      "3. Open Claude Code in that folder and allow the team-contract tool when asked.",
+      "",
+      `Team dashboard: ${dashboard}`,
+    ].join("\n");
+  }
+  function copyInvite() {
+    copyText(inviteText(), $("room-copy-status"), "Could not copy. Open Connect your project and copy the command from there.")
+      .then(() => { if ($("room-copy-status").textContent === "Copied.") $("room-copy-status").textContent = "Invite copied. Paste it to your teammate."; });
+  }
+
   function selectNavigation() {
     for (const link of document.querySelectorAll("nav a")) {
       if (link.hash === (location.hash || "#overview")) link.setAttribute("aria-current", "location");
@@ -463,37 +514,41 @@
   selectNavigation();
 
   function openGuide(kind) {
-    // Quote room values for the macOS/Linux shell, including embedded quotes.
-    const quote = (value) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
     const guides = {
-      menu: {title: "Your project action menu", intro: "After joining, open Terminal in your project folder. Copy this one command, then choose an action by number. Commands run on your computer.", steps: [["Open workspace", "Launch Claude and your saved sync preference together.", "python3 coord/team.py --action work"], ["Open menu", "Start a task, share, sync, see or release your reservations, check setup, or open Claude.", "python3 coord/team.py"], ["Check setup directly", "Find missing client files, agent configuration, tools, or server connectivity.", "python3 coord/team.py --action doctor"]]},
+      menu: {
+        title: "Everyday shortcuts",
+        intro: "In Terminal, inside your project folder. Type ./tc on its own to see every action as a numbered menu.",
+        steps: [
+          ["What's going on?", "Who is working on what, anything that needs you, and one next step.", "./tc today"],
+          ["Open your workspace", "Opens Claude, and keeps your shared branch updated if you turned that on during setup.", "./tc work"],
+          ["Everything else", "Start a task, share, get the latest code, see claims, check your setup.", "./tc"],
+        ],
+      },
       setup: {
         title: "Connect your project",
-        intro: "Run one command and follow the questions. Setup handles installation and can open your workspace. You need Python 3 and curl on Mac or Linux.",
+        intro: "One command, then answer a few questions. You need Python 3 and curl, on Mac or Linux.",
         steps: [
-          ["Join this room", "Open Terminal inside your project folder and run this. It installs Team Contract, asks for your name, helps connect GitHub, and offers to open Claude with background syncing.",
-           `curl -fsSL ${quote(location.origin + "/install.sh")} | bash -s -- --room ${quote(room)} --server ${quote(location.origin)}`],
-          ["Next time: open your workspace", "One command opens Claude, the dashboard, and your saved sync preference. For other actions, choose Action menu on this page.", "python3 coord/team.py --action work"],
+          ["Join this room", "Open Terminal inside your project folder, paste this, and follow the questions. It installs Team Contract, asks your name, can connect GitHub, and can open Claude for you.",
+           `curl -fsSL ${shellQuote(location.origin + "/install.sh")} | bash -s -- --room ${shellQuote(room)} --server ${shellQuote(location.origin)}`],
+          ["Next time", "In that folder: ./tc work opens Claude, ./tc today shows what is going on.", "./tc today"],
         ],
       },
       publish: {
         title: "Share changes for review",
-        intro: "The easy way: in Claude Code, say “start a task for the todo API”, do the work, then say “share my work”. Claude runs the steps below and gives you the review link. Or run the commands yourself in Terminal, in your project folder.",
+        intro: "Easiest: just ask Claude. It starts the task, commits the files that belong to it, checks them against the team's decisions and opens the pull request, then gives you the review link.",
         steps: [
-          ["Open the action menu", "Choose Start a task or Share committed work. The detailed commands below are optional.", "python3 coord/team.py"],
-          ["Start a task", "Replace my-task with a unique name, such as ali/todo-api. This starts from the latest shared code. Work you already began on the shared branch comes along.", `${cli} start my-task`],
-          ["Make and commit your edits", "Select the files you want to share in your editor’s Source Control panel and commit them."],
-          ["Publish for review", "This uploads your commits and opens or updates a pull request. Share the review link printed in Terminal.", `${cli} publish --ready`],
+          ["Say this to Claude before you begin", "Claude starts a task branch from the team's latest code. Work you already began comes along.", "start a task for the todo API"],
+          ["Say this when it works", "Claude commits this task's files, checks them against the contract, and opens or updates the pull request.", "share my work"],
+          ["Or in Terminal", "./tc start asks for the task in plain words. ./tc share shares what you have committed.", "./tc share"],
         ],
       },
       sync: {
-        title: "Sync merged updates",
-        intro: "The easy way: in Claude Code, say “get the latest code from the team”. Or run a command yourself in Terminal, in your project folder.",
+        title: "Get the team's latest code",
+        intro: "Easiest: just ask Claude. Your copy is only updated when that is safe, and you are told why when it is not. Your unsaved work is never overwritten.",
         steps: [
-          ["Open the action menu", "Choose Get latest code or Keep my main branch updated.", "python3 coord/team.py"],
-          ["Check once", "Apply merged changes (an approval review is optional) if you’re on the shared branch and have no local edits.", `${cli} watch --once`],
-          ["Or keep syncing automatically", "Leave this terminal open for approval and merge notices. Press Ctrl+C when you want it to stop.", `${cli} watch`],
-          ["Optional: require approval reviews", "Merged pull requests are included by default. Use this only if you want to require an approval review too.", `${cli} watch --approved-only`],
+          ["Say this to Claude", "Brings merged pull requests into your shared branch.", "get the latest code from the team"],
+          ["Or in Terminal, once", "Does the same thing from Terminal.", "./tc sync"],
+          ["Or keep it updated while you work", "Leave this window open. Press Ctrl+C to stop.", "./tc watch"],
         ],
       },
     };
@@ -515,7 +570,7 @@
       step.append(el("strong", null, label), el("p", "hint", description));
       if (command) {
         const box = el("div", "command-box");
-        const copy = el("button", "control", "Copy command");
+        const copy = el("button", "control", "Copy");
         copy.type = "button";
         copy.setAttribute("aria-label", `Copy command for ${label.toLowerCase()}`);
         copy.addEventListener("click", () => copyText(command, $("command-copy-status"), "Select the command to copy it manually."));
@@ -1067,6 +1122,51 @@
     }
   });
 
+  // A setup list that ticks itself off from what the room already shows.
+  const checklistHidden = () => memory.read("localStorage", "tc-checklist-hidden:" + room) === "1";
+  function renderChecklist(state) {
+    const people = state.people || [];
+    const steps = [
+      [people.length > 0, "Connect your project", "Run one command in your project folder.", ["Show me how", () => openGuide("setup")]],
+      [Boolean(state.room_key || state.approval_enabled), "Set a team key", "A password only people know, needed to settle conflicts and approve requests.", ["Set team key", () => $("set-key").click()]],
+      [people.length > 1, "Invite a teammate", "Copy a ready-made message with the one command, and send it.", ["Copy invite", copyInvite]],
+      [Boolean(state.git?.repository), "Connect GitHub (optional)", "Lets agents share work as pull requests and bring in merged code.", ["Show me how", () => openGuide("setup")]],
+      [(state.decisions || []).length > 0, "Make your first team decision", "Ask Claude to build something. It records choices like the framework, so every agent follows them.", null],
+    ];
+    const done = steps.filter(([ok]) => ok).length;
+    const card = $("checklist");
+    card.hidden = done === steps.length || checklistHidden();
+    if (card.hidden) return;
+    const signature = JSON.stringify(steps.map(([ok]) => ok));
+    if (card.dataset.signature === signature) return;
+    card.dataset.signature = signature;
+    $("checklist-progress").textContent = `${done} of ${steps.length} done`;
+    $("checklist-bar").style.width = `${(100 * done) / steps.length}%`;
+    const list = $("checklist-steps");
+    list.replaceChildren();
+    let next = true;
+    steps.forEach(([ok, label, hint, action], index) => {
+      const item = el("li", ok ? "done" : next ? "next" : "");
+      if (!ok) next = false;
+      item.append(el("span", "tick", ok ? "✓" : String(index + 1)));
+      const text = el("div");
+      text.append(el("strong", null, label), el("p", "hint", ok ? "Done." : hint));
+      item.append(text);
+      if (!ok && action) {
+        const button = el("button", item.className === "next" ? "control primary" : "control", action[0]);
+        button.type = "button";
+        button.addEventListener("click", action[1]);
+        item.append(button);
+      }
+      list.append(item);
+    });
+  }
+  $("checklist-hide").addEventListener("click", () => {
+    memory.write("localStorage", "tc-checklist-hidden:" + room, "1");
+    $("checklist").hidden = true;
+  });
+  $("copy-invite").addEventListener("click", copyInvite);
+
   let knownPeople = [];
   $("chat-name").value = savedName();
   $("chat-form").addEventListener("submit", async (event) => {
@@ -1162,6 +1262,7 @@
       $("git-panel").dataset.signature = gitSignature;
     }
     knownPeople = state.people || [];
+    renderChecklist(state);
     const messagesSignature = JSON.stringify(state.messages ?? []);
     if ($("messages").dataset.signature !== messagesSignature) {
       renderMessages(state.messages);

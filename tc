@@ -1,0 +1,5 @@
+#!/bin/sh
+# Team Contract shortcut. Run ./tc for a menu, or ./tc today, ./tc start, ./tc share, ./tc sync.
+# It runs the menu in coord/team.py with Python 3, from this folder.
+cd "$(dirname "$0")" || exit 1
+exec python3 coord/team.py "$@"

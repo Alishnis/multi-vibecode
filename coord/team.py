@@ -14,13 +14,43 @@ import webbrowser
 import git_sync
 
 ROOT = Path(__file__).resolve().parent.parent
+# The word you type after ./tc, and what it does. The menu shows them in this order.
 ACTIONS = {
-    "work": "Open my workspace (Claude + optional sync)", "setup": "Finish guided setup",
-    "start": "Start a task", "share": "Share committed work", "sync": "Get latest code",
-    "watch": "Keep my main branch updated", "status": "Check branch status",
-    "claims": "See reserved files", "release": "Release my reservations",
-    "doctor": "Check my setup", "room": "Open team dashboard", "claude": "Open Claude Code",
+    "today": "What's happening, and what to do next",
+    "work": "Open my workspace (Claude, plus syncing if I turned it on)",
+    "start": "Start a new task",
+    "share": "Share my saved work for review",
+    "sync": "Get the team's latest code",
+    "status": "Where my branch and pull request stand",
+    "claims": "Which files are claimed",
+    "release": "Release my claims",
+    "room": "Open the team dashboard",
+    "watch": "Keep my shared branch updated while this window is open",
+    "claude": "Open Claude Code",
+    "setup": "Run guided setup again",
+    "doctor": "Check my setup",
 }
+SHORTCUT = "./tc"  # the launcher the installer puts in the project folder
+
+
+def usage() -> str:
+    width = max(map(len, ACTIONS))
+    return "Type ./tc and a word:\n" + "\n".join(f"  {SHORTCUT} {word.ljust(width)}  {text}" for word, text in ACTIONS.items())
+
+
+def today(me):
+    """Print the room in plain words, ending with one next step."""
+    from summary import describe
+    try:
+        state = git_sync.api(me, "GET", "/state?" + urllib.parse.urlencode({"room": me["room"]}))
+    except ValueError as error:
+        print(f"Could not reach the team server at {me['server']}. {error}\n"
+              "Check your internet connection. A free hosted server sleeps when idle: "
+              "open the dashboard in a browser to wake it, then try again.")
+        return 1
+    dashboard = me["server"].rstrip("/") + "/app?" + urllib.parse.urlencode({"room": me["room"]})
+    print(describe(state, me["name"], dashboard))
+    return 0
 
 
 def confirm(question, default=False):
@@ -74,7 +104,7 @@ def setup(me):
     doctor(me)
     if confirm("Open your workspace now?", True):
         return workspace(me)
-    print("Ready. Next time run: python3 coord/team.py --action work")
+    print("Ready. Next time, in this folder, run: ./tc work   (or ./tc for everything else)")
     return 0
 
 
@@ -150,13 +180,20 @@ def doctor(me):
 
 
 def perform(action, me):
+    if action == "today":
+        return today(me)
     if action == "setup":
         return setup(me)
     if action == "work":
         return workspace(me)
     if action == "start":
-        branch = input("Task branch (for example ali/welcome-message): ").strip()
-        return run_git("start", branch) if branch else 0
+        topic = input("What is the task, in a few words? (for example: welcome message) ").strip()
+        if not topic:
+            return 0
+        # A branch name from the person's name and the topic: "Ali", "welcome message" -> ali/welcome-message
+        slug = "-".join(re.findall(r"[a-z0-9]+", topic.lower()))[:40] or "task"
+        owner = "-".join(re.findall(r"[a-z0-9]+", me["name"].lower())) or "me"
+        return run_git("start", f"{owner}/{slug}")
     commands = {"share": ("publish", "--ready"), "sync": ("watch", "--once"),
                 "watch": ("watch",), "status": ("status",)}
     if action in commands:
@@ -166,7 +203,7 @@ def perform(action, me):
     if action == "doctor":
         return doctor(me)
     if action == "room":
-        url = me["server"].rstrip("/") + "/?" + urllib.parse.urlencode({"room": me["room"]})
+        url = me["server"].rstrip("/") + "/app?" + urllib.parse.urlencode({"room": me["room"]})
         webbrowser.open(url)
         print(url)
     elif action == "claims":
@@ -189,9 +226,19 @@ def perform(action, me):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Team Contract action menu")
+    parser = argparse.ArgumentParser(description="Team Contract action menu", add_help=False)
+    parser.add_argument("word", nargs="?", help="what to do, for example today, start, share or sync")
     parser.add_argument("--action", choices=ACTIONS)
+    parser.add_argument("-h", "--help", action="store_true")
     args = parser.parse_args()
+    word = args.action or args.word
+    if args.help or word == "help":
+        print(usage())
+        return 0
+    if word and word not in ACTIONS:
+        print(f"I don't know \"{word}\".\n" + usage())
+        return 2
+    args.action = word
     try:
         me = json.loads((ROOT / "coord/me.json").read_text())
         if not all(isinstance(me.get(key), str) and me[key] for key in ("name", "room", "server")):
@@ -203,21 +250,23 @@ def main():
             return 1
         actions = list(ACTIONS)
         while True:
-            print("\nTeam Contract — choose an action")
+            print("\nTeam Contract — what would you like to do?")
             for number, action in enumerate(actions, 1):
-                print(f"  {number}. {ACTIONS[action]}")
-            choice = input("  0. Exit\nChoice: ").strip()
-            if choice == "0":
+                print(f"  {number:>2}. {ACTIONS[action]}   ({SHORTCUT} {action})")
+            choice = input("   0. Exit\nType a number or a word: ").strip().lower()
+            if choice in {"0", "exit", "quit", "q"}:
                 return 0
-            if not choice.isdigit() or not 1 <= int(choice) <= len(actions):
-                print("Choose one of the numbers above.")
+            if choice.isdigit() and 1 <= int(choice) <= len(actions):
+                choice = actions[int(choice) - 1]
+            if choice not in ACTIONS:
+                print("Type one of the numbers or words above.")
                 continue
             try:
-                perform(actions[int(choice) - 1], me)
+                perform(choice, me)
             except KeyboardInterrupt:
                 print("\nStopped. Returning to menu.")
             except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
-                print(f"Action could not finish ({type(error).__name__}). Run Check my setup.")
+                print(f"Action could not finish ({type(error).__name__}). Run ./tc doctor to check your setup.")
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         print(f"Setup or action could not finish ({type(error).__name__}). Run the installer or Check my setup.")
         return 1
