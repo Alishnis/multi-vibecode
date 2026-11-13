@@ -82,6 +82,7 @@ class TerminalWarningsTest(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, "-B", str(project / "coord/hooks/file_activity.py")],
             input=json.dumps(payload), cwd=project, capture_output=True, text=True, timeout=10,
+            env={**os.environ, "HOME": str(self.root)},  # the checkout key goes to a temporary home
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout) if result.stdout.strip() else None
@@ -90,7 +91,7 @@ class TerminalWarningsTest(unittest.TestCase):
         self.assertIsNone(self.hook("Mei"))
         self.assertIsNone(self.hook("Ali", "PostToolUse"))
         warning = self.hook("Mei")
-        self.assertIn("[Team Contract: FILE OVERLAP]", warning["systemMessage"])
+        self.assertIn("[Team Contract: ACTIVE COLLISION]", warning["systemMessage"])
         self.assertIn("src/todos.py", warning["systemMessage"])
         self.assertIn("Ali", warning["systemMessage"])
         self.assertIn("just now", warning["systemMessage"])
@@ -111,7 +112,7 @@ class TerminalWarningsTest(unittest.TestCase):
         self.configure("Mei", overlap="note")
         warning = self.hook("Mei")
         self.assertIn("Warning only", warning["systemMessage"])
-        self.assertIn("FILE OVERLAP", warning["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("ACTIVE COLLISION", warning["hookSpecificOutput"]["additionalContext"])
         self.assertNotIn("permissionDecision", warning["hookSpecificOutput"])
 
     def test_all_registered_edit_tools_deliver_warnings(self):
@@ -120,7 +121,7 @@ class TerminalWarningsTest(unittest.TestCase):
         for tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
             with self.subTest(tool=tool):
                 self.hook("Ali", "PostToolUse", tool=tool, path=f"src/{tool}.txt")
-                self.assertIn("FILE OVERLAP", self.hook("Mei", tool=tool, path=f"src/{tool}.txt")["systemMessage"])
+                self.assertIn("ACTIVE COLLISION", self.hook("Mei", tool=tool, path=f"src/{tool}.txt")["systemMessage"])
 
     def test_unrelated_tools_failed_edits_and_unsafe_paths_send_nothing(self):
         for event, tool, path in (
@@ -170,8 +171,89 @@ class TerminalWarningsTest(unittest.TestCase):
                                      "edited_at": datetime.now(timezone.utc).isoformat()}]})
         warning = self.hook("Mei")
         self.assertIn("Ali on main", warning["systemMessage"])
-        self.assertIn("may not be in your local copy", warning["systemMessage"])
+        self.assertIn("[Team Contract: WORK IN ANOTHER CHECKOUT]", warning["systemMessage"])
+        self.assertIn("in their own copy, not in yours", warning["systemMessage"])
         self.assertIn("does not prove", warning["hookSpecificOutput"]["additionalContext"])
+
+    # ---- change reports and the four kinds of overlap ----
+
+    def write(self, name, text, path="src/todos.py"):
+        file = self.projects[name] / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(text)
+
+    def age_edit(self, author, minutes):
+        """Pretend a teammate's edit, and their last sign of life, happened some minutes ago."""
+        from datetime import timedelta
+        then = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat(timespec="seconds")
+        with server.connect() as conn:
+            conn.execute("UPDATE file_edits SET edited_at = ? WHERE author = ?", (then, author))
+            conn.execute("UPDATE people SET last_seen = ? WHERE name = ?", (then, author))
+
+    def test_edit_report_carries_session_checkout_and_a_summary_without_code(self):
+        self.write("Ali", "def list_todos():\n    return SECRET_TOKEN\n")
+        self.hook("Ali", "PostToolUse", tool="Edit", tool_input={
+            "file_path": "src/todos.py", "old_string": "pass",
+            "new_string": "def list_todos():\n    return SECRET_TOKEN\n",
+        })
+        path, sent = self.requests[-1]
+        self.assertEqual(path, "/files/edits")
+        self.assertEqual(sent["summary"], "+2/-1 lines, touching list_todos")
+        self.assertEqual(sent["tool"], "Edit")
+        for field in ("session", "checkout_id", "content_hash"):
+            self.assertRegex(sent[field], r"^[0-9a-f]{16,32}$")
+        self.assertNotIn("Ali-session", json.dumps(sent))      # the real session id stays local
+        self.assertNotIn("SECRET_TOKEN", json.dumps(sent))     # and so does the code
+        self.assertNotIn(str(self.root), json.dumps(sent))     # and the folder
+        edit = self.enterContext(TestClient(server.app)).get("/state?room=terminal-test").json()["files"]["edits"][0]
+        self.assertEqual((edit["summary"], edit["tool"]), ("+2/-1 lines, touching list_todos", "Edit"))
+        warning = self.hook("Mei")
+        self.assertIn("Ali edited this file (just now): +2/-1 lines, touching list_todos.", warning["systemMessage"])
+        self.assertIn("touching list_todos", warning["hookSpecificOutput"]["additionalContext"])
+
+    def test_active_collision_becomes_work_in_another_checkout_when_the_teammate_stops(self):
+        self.write("Ali", "v2 from Ali\n")
+        self.write("Mei", "v1\n")
+        self.hook("Ali", "PostToolUse")
+        self.assertIn("[Team Contract: ACTIVE COLLISION]", self.hook("Mei")["systemMessage"])
+        self.age_edit("Ali", 12)
+        warning = self.hook("Mei")
+        self.assertIn("[Team Contract: WORK IN ANOTHER CHECKOUT]", warning["systemMessage"])
+        self.assertIn("12 min ago", warning["systemMessage"])
+        self.assertIn("merge conflict is forming", warning["systemMessage"])
+        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_outdated_read_when_their_version_is_in_my_copy_until_i_read_it(self):
+        for name in ("Ali", "Mei"):                       # Mei already has Ali's exact file, say after a pull
+            self.write(name, "the same bytes\n")
+        self.hook("Ali", "PostToolUse")
+        self.age_edit("Ali", 12)
+        warning = self.hook("Mei")
+        self.assertIn("[Team Contract: OUTDATED READ]", warning["systemMessage"])
+        self.assertIn("read the file again", warning["systemMessage"])
+        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "ask")
+        requests_before = len(self.requests)
+        self.assertIsNone(self.hook("Mei", "PostToolUse", tool="Read"))
+        self.assertEqual(len(self.requests), requests_before)   # a read is remembered locally, not sent
+        self.assertIsNone(self.hook("Mei"))                     # up to date and freshly read: nothing to say
+        self.assertIsNotNone(self.hook("Mei", session_id="another-session"))  # a different session has not read it
+
+    def test_recent_edit_in_a_shared_folder_is_a_note_not_a_pause(self):
+        # Two teammates' agents in one folder: the same checkout.
+        self.write("Mei", "v1\n")
+        me_file = self.projects["Mei"] / "coord/me.json"
+        me_file.write_text(json.dumps({"name": "Ali", "room": "terminal-test", "server": self.url}))
+        self.hook("Mei", "PostToolUse", session_id="ali-in-shared-folder")
+        self.configure("Mei")
+        self.age_edit("Ali", 12)
+        self.write("Mei", "v2, changed since\n")
+        stale = self.hook("Mei")
+        self.assertIn("[Team Contract: OUTDATED READ]", stale["systemMessage"])   # not read since Ali's change
+        self.hook("Mei", "PostToolUse", tool="Read")
+        recent = self.hook("Mei")
+        self.assertIn("[Team Contract: RECENT EDIT]", recent["systemMessage"])
+        self.assertIn("Low urgency", recent["systemMessage"])
+        self.assertNotIn("permissionDecision", recent["hookSpecificOutput"])
 
     def test_reinstall_preserves_warning_preferences_and_does_not_duplicate_hooks(self):
         self.configure("Mei", overlap="note", check_code=False)

@@ -149,24 +149,48 @@ By default the watcher applies only pull requests that someone approved. Many sm
 
 Rerun the installer and restart Claude Code in each teammate's project. Use the same room with distinct names. In a linked room, both checkouts must point to the room's GitHub repository.
 
-When Claude Code successfully edits a file using Edit, Write, MultiEdit, or NotebookEdit, Team Contract reports the project-relative path, teammate name, branch if available, and time. When a different teammate's agent is about to edit the same path within 30 minutes, the hook delivers a **FILE OVERLAP** notice to the terminal user and context to Claude before the edit. By default it also asks you to allow or deny the edit. After an allowed edit succeeds and is reported, further edits to that file go through until a teammate changes it again. The dashboard shows the recent reports and marks paths reported by multiple teammates.
+### What is reported after each edit
+
+When Claude Code successfully edits a file using Edit, Write, MultiEdit, or NotebookEdit, a hook reports it to the room. Nobody has to do anything. The report holds:
+
+| Field | Example | Notes |
+| --- | --- | --- |
+| File path | `src/todos.py` | Relative to the project folder. |
+| Teammate and branch | Ali, `ali/todo-delete` | |
+| Session | `f7cfb68784229f55` | An opaque id for the Claude Code session. Not the real session id. |
+| Change summary | `+5/-1 lines, touching count_todos` | Line counts and the names the edit introduced. Never code. |
+| Checkout id | `9a41…` | Says whether two edits were made in the same folder. Made with a random key that stays on your computer, so it names neither the computer nor the folder. |
+| File fingerprint | `c03e…` | A hash of the file after the edit. Lets a teammate's computer tell whether it has exactly that version. |
+
+The dashboard shows the summary next to each recent edit. When this session reads a file, the time is noted on your computer only (`coord/.state/`, kept out of Git).
+
+### Four kinds of warning
+
+Before an edit, the hook asks the room whether a teammate changed the same file in the last 30 minutes. If so, the warning appears in the terminal and is given to Claude. It names one of four kinds:
+
+| Kind | When | What to do |
+| --- | --- | --- |
+| **ACTIVE COLLISION** | A teammate changed the file in the last 5 minutes and their agent is still working. | Agree who changes which part before editing. |
+| **OUTDATED READ** | Their change is already in your copy of the file, but this session read the file before it. | Read the file again, then edit. |
+| **WORK IN ANOTHER CHECKOUT** | Their change is in their own copy, not yours. Reading your file again will not show it. | Get their changes first, or agree who edits what. A merge conflict is forming. |
+| **RECENT EDIT** | Their change was in your copy when this session last read the file. | Low urgency. Check that your edit does not undo theirs. |
+
+The first three pause the edit and ask you to allow or deny it. A recent edit is a note only. If your file is exactly the version the teammate left and this session has read it since, nothing is said. After an allowed edit succeeds, further edits to that file go through until a teammate changes it again.
 
 Example terminal notice (Claude Code controls its visual styling):
 
 ```text
-[Team Contract: FILE OVERLAP]
-File: src/todos.py
-  Ali on ali/todos edited this file (just now).
-Their changes may not be in your local copy yet.
-Next: review their changes before editing the same code.
+[Team Contract: ACTIVE COLLISION]
+File: app.py
+  Ali on ali/todo-delete edited this file (just now): +5/-1 lines, touching count_todos.
+They are working on this file right now, and their latest version is not in your copy.
+Next: agree with them who changes which part before you edit, or one of you will have to merge by hand.
 Choose whether to continue in Claude Code's approval prompt.
 ```
 
-This reports a recent edit, not proof that someone is still typing or that the code will conflict. The same branch name on two computers does not mean their files are identical. The hook does not fetch or merge code.
+Ranking a warning by "is their change in my copy" and "are they still there" follows the published AgentMash protocol. The code is our own. Unlike AgentMash, a live edit on another laptop counts as an active collision here.
 
-To try it, have Claude Code in the first checkout write a test file such as `src/todos.py`. Then ask Claude Code in the second checkout to edit the same relative path, and watch for the question before the second change. Shell commands and edits made outside these Claude Code tools are outside this check. Only file metadata is sent to the server.
-
-To show the terminal warning and give Claude context without requesting approval, add `"overlap": "note"` to `coord/me.json`. Normal Claude Code permissions still apply. The installer preserves this preference on upgrades. In a session with nobody at the keyboard (`claude -p`), a question cannot be answered, so the default edit is refused; use the note setting there.
+To show the warning and give Claude context without requesting approval, add `"overlap": "note"` to `coord/me.json`. Normal Claude Code permissions still apply. The installer preserves this preference on upgrades. In a session with nobody at the keyboard (`claude -p`), a question cannot be answered, so the default edit is refused; use the note setting there.
 
 If the check fails, a **CHECK UNAVAILABLE** notice says the edit was not checked. The hook does not block the edit on a connection failure. A quiet successful check means no matching recent report was found; it cannot guarantee no teammate is editing.
 

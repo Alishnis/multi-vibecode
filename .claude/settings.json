@@ -22,6 +22,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/coord/hooks/file_activity.py\" read",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

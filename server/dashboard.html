@@ -999,6 +999,8 @@
         const author = edit.branch ? `${edit.author} · ${edit.branch}` : edit.author;
         const meta = el("div", "meta", `${author} · `);
         meta.append(timeSpan(edit.edited_at));
+        // What the edit did, as the teammate's computer summarised it: counts and names, no code.
+        if (edit.summary) meta.append(document.createTextNode(` · ${edit.summary}`));
         row.append(meta);
       }
       list.append(row);

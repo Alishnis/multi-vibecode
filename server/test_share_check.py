@@ -198,4 +198,4 @@ class OverlapPauseTest(unittest.TestCase):
         self.assertIn("src/todos.py", paused["permissionDecisionReason"])
         noted = self.hook_output({"overlap": "note"})
         self.assertNotIn("permissionDecision", noted["hookSpecificOutput"])
-        self.assertIn("FILE OVERLAP", noted["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("WORK IN ANOTHER CHECKOUT", noted["hookSpecificOutput"]["additionalContext"])

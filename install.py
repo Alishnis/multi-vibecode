@@ -39,7 +39,7 @@ FILES_TO_COPY = [
 ]
 HOOK_SCRIPTS = ("coord/hooks/contract_hook.py", "coord/hooks/file_activity.py")
 TOOL_NAME = "team-contract"
-IGNORE_LINES = ["coord/me.json", ".claude/settings.local.json"]
+IGNORE_LINES = ["coord/me.json", "coord/.state/", ".claude/settings.local.json"]
 
 
 def stop(message: str) -> None:

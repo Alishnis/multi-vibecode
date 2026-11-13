@@ -186,6 +186,12 @@ def create_tables() -> None:
         add_column(conn, "conflicts", "resolved_at", "TEXT")
         add_column(conn, "people", "contract_seen_at", "TEXT")
         add_column(conn, "git_activity", "pr_state", "TEXT")
+        # What each edit report carries besides who and where. session and
+        # checkout_id are opaque ids made on the teammate's computer;
+        # content_hash is a fingerprint of the file after the edit. None of
+        # them reveals a folder name, a prompt or any code.
+        for column in ("session", "checkout_id", "summary", "tool", "content_hash"):
+            add_column(conn, "file_edits", column, "TEXT")
         # The last contract check of each person's shared code. Only the
         # findings are kept, never the code itself.
         conn.execute(
@@ -435,10 +441,41 @@ class ShareCheck(RoomAuthor):
         return [clean_line(name)[:500] for name in files]
 
 
+def opaque_id(value):
+    """An id made by a client: letters, digits, dash, underscore. Anything else is dropped.
+
+    A strange value costs the report that one field, never the whole report.
+    """
+    if isinstance(value, str) and 4 <= len(value) <= 64 and value.replace("-", "").replace("_", "").isalnum() \
+            and value.isascii():
+        return value
+    return None
+
+
+def short_text(limit: int):
+    def clean(value):
+        if not isinstance(value, str):
+            return None
+        try:
+            return clean_line(value)[:limit] or None
+        except ValueError:
+            return None
+    return clean
+
+
+OpaqueId = Annotated[str | None, BeforeValidator(opaque_id)]
+
+
 class FileActivity(RoomAuthor):
     path: str = Field(min_length=1, max_length=500)
     repository: str | None = Field(default=None, max_length=141)
     branch: str | None = Field(default=None, min_length=1, max_length=250)
+    # Sent with an edit report. Old clients send none of these.
+    session: OpaqueId = None          # which agent session made the edit
+    checkout_id: OpaqueId = None      # which working folder it was made in
+    content_hash: OpaqueId = None     # fingerprint of the file after the edit
+    tool: Annotated[str | None, BeforeValidator(short_text(50))] = None
+    summary: Annotated[str | None, BeforeValidator(short_text(300))] = None
 
     @field_validator("path")
     @classmethod
@@ -870,7 +907,7 @@ def get_state(room: RoomParam) -> dict:
             )
         ]
         file_edits = [dict(row) for row in conn.execute(
-            "SELECT path, author, branch, edited_at FROM file_edits "
+            "SELECT path, author, branch, edited_at, summary, tool, session FROM file_edits "
             "WHERE room = ? AND edited_at >= ? ORDER BY edited_at DESC, path, author LIMIT 100",
             (room, recent_file_cutoff()),
         )]
@@ -1013,19 +1050,30 @@ def check_file(activity: FileActivity) -> dict:
             # Only edits newer than this person's own last edit of the file.
             # Once they have gone ahead, they are not asked again until a
             # teammate touches the file again.
-            "SELECT author, branch, edited_at FROM file_edits "
-            "WHERE room = ? AND path = ? AND author <> ? AND edited_at >= ? "
-            "AND edited_at > COALESCE((SELECT edited_at FROM file_edits "
-            "                          WHERE room = ? AND path = ? AND author = ?), '') "
-            "ORDER BY edited_at DESC, author LIMIT 5",
+            "SELECT e.author, e.branch, e.edited_at, e.summary, e.checkout_id, e.content_hash, "
+            "       p.last_seen FROM file_edits e "
+            "LEFT JOIN people p ON p.room = e.room AND p.name = e.author "
+            "WHERE e.room = ? AND e.path = ? AND e.author <> ? AND e.edited_at >= ? "
+            "AND e.edited_at > COALESCE((SELECT edited_at FROM file_edits "
+            "                            WHERE room = ? AND path = ? AND author = ?), '') "
+            "ORDER BY e.edited_at DESC, e.author LIMIT 5",
             (activity.room, activity.path, activity.author, recent_file_cutoff(),
              activity.room, activity.path, activity.author),
         )]
-    return {"edits": edits}
+    current = datetime.now(timezone.utc)
+    for edit in edits:
+        # How long ago the teammate's agent last did anything: a prompt, an edit, a tool call.
+        seen = edit.pop("last_seen")
+        edit["seconds_since_seen"] = (
+            int((current - datetime.fromisoformat(seen)).total_seconds()) if seen else None
+        )
+    # "now" lets a client compare these times with its own clock.
+    return {"edits": edits, "now": now()}
 
 
 @app.post("/files/edits")
 def record_file_edit(activity: FileActivity) -> dict:
+    touch_person(activity.room, activity.author)
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
         require_linked_checkout(conn, activity)
@@ -1034,10 +1082,14 @@ def record_file_edit(activity: FileActivity) -> dict:
             (activity.room, recent_file_cutoff()),
         )
         conn.execute(
-            "INSERT INTO file_edits (room, path, author, branch, edited_at) VALUES (?, ?, ?, ?, ?) "
+            "INSERT INTO file_edits (room, path, author, branch, edited_at, session, checkout_id, "
+            "summary, tool, content_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT (room, path, author) DO UPDATE SET "
-            "branch = excluded.branch, edited_at = excluded.edited_at",
-            (activity.room, activity.path, activity.author, activity.branch, now()),
+            "branch = excluded.branch, edited_at = excluded.edited_at, session = excluded.session, "
+            "checkout_id = excluded.checkout_id, summary = excluded.summary, tool = excluded.tool, "
+            "content_hash = excluded.content_hash",
+            (activity.room, activity.path, activity.author, activity.branch, now(), activity.session,
+             activity.checkout_id, activity.summary, activity.tool, activity.content_hash),
         )
     return {"ok": True}
 

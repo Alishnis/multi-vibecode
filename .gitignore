@@ -5,3 +5,4 @@ coord/me.json
 .env
 .DS_Store
 .claude/settings.local.json
+coord/.state/
