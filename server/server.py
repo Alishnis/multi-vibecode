@@ -1401,6 +1401,23 @@ def health() -> dict:
 
 
 @app.get("/", include_in_schema=False)
+def homepage(room: str | None = None) -> FileResponse:
+    # Preserve all previously shared /?room=... links.
+    page = DASHBOARD_PATH if room is not None else PROJECT_ROOT / "server/landing.html"
+    return FileResponse(page, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/app", include_in_schema=False)
 def dashboard() -> FileResponse:
-    """The dashboard page. Open http://localhost:8000/?room=demo"""
     return FileResponse(DASHBOARD_PATH, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/design.css", include_in_schema=False)
+def design_css() -> FileResponse:
+    return FileResponse(PROJECT_ROOT / "server/design.css", media_type="text/css")
+
+
+@app.get("/install.sh", include_in_schema=False)
+def bootstrap() -> FileResponse:
+    return FileResponse(PROJECT_ROOT / "server/install.sh", media_type="text/plain",
+                        headers={"Cache-Control": "no-store"})

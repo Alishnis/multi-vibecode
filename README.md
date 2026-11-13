@@ -2,6 +2,28 @@
 
 Team Contract shares project decisions between Claude Code sessions. Each prompt loads the decisions for your team's room. When Claude proposes a decision that contradicts an existing one, the server logs the conflict and keeps the existing decision in the contract. A person then settles the conflict on the dashboard, and every teammate's agent is told about the change on its next prompt.
 
+## Guided setup — one command
+
+Open [Team Contract](https://team-contract.onrender.com/), choose your room and name, and copy the setup command. Run it inside your project folder on Mac or Linux:
+
+```sh
+curl -fsSL https://team-contract.onrender.com/install.sh | bash -s -- --server https://team-contract.onrender.com --room YOUR_ROOM
+```
+
+Python 3 and curl are prerequisites. Setup installs the Team Contract files and merges the agent configuration with your existing settings. It offers to install Claude Code from Anthropic, install GitHub CLI through an existing Homebrew installation, sign into GitHub, and link the current GitHub repository to your room. Linking needs a team key, set on the dashboard. If Homebrew is unavailable, setup points to GitHub CLI’s installer. It does not create or replace your project’s Git repository.
+
+Choose whether automatic sync should run while your workspace is open. Setup saves that preference, checks the installation, and offers to open the dashboard and Claude. Claude login, project trust, and agent permissions still require your interaction.
+
+For every later session, run:
+
+```sh
+python3 coord/team.py --action work
+```
+
+This opens Claude and the dashboard, and runs the Git watcher if you enabled it. The watcher stops when Claude exits; its messages are saved in `coord/.state/sync.log`. Only clean shared branches receive merged PR updates. To change preferences, run `python3 coord/team.py --action setup`. For the numbered action menu, run `python3 coord/team.py`.
+
+The website copies the command; it does not execute commands on your computer. Re-run setup to upgrade an existing project, then restart Claude. Your name, room, privacy preferences, and unrelated agent settings are preserved.
+
 ## Try it on one Mac
 
 You need Python 3 and a working Claude Code login. These steps use the hosted server on Render. Open [server health](https://team-contract.onrender.com/health) and wait for `{"ok":true}` before starting.
@@ -31,9 +53,7 @@ If you already cloned this repository, start inside your existing checkout. Keep
 The quickest way needs no checkout of this repository. Open the room dashboard, select **Connect your project** (or **Setup guide**), and copy the **Join this room** command. Run it in Terminal inside your project folder on a Mac or Linux computer. It downloads the installer and client scripts from the server (`/client.zip`), adds them to the folder, and asks for your name. The files always match the server's version.
 
 ```sh
-d=$(mktemp -d) && curl -fsSL 'https://team-contract.onrender.com/client.zip' -o "$d/tc.zip" \
-  && unzip -q "$d/tc.zip" -d "$d" \
-  && python3 "$d/install.py" . --room 'SHARED_ROOM_CODE' --server 'https://team-contract.onrender.com'
+curl -fsSL https://team-contract.onrender.com/install.sh | bash -s -- --server https://team-contract.onrender.com --room SHARED_ROOM_CODE
 ```
 
 You can also run the installer from a checkout of this repository, pointing it at your project folder:

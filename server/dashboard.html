@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Team Contract</title>
+<title>Team workspace · Team Contract</title>
+<link rel="stylesheet" href="/design.css">
 <style>
   :root {
     --bg: #f6f7f9;
@@ -325,13 +326,52 @@
     .column { display: contents; }
     #terminal-dialog { padding: 18px; }
   }
+
+  /* The same light surfaces and blue accents as the public homepage. */
+  :root {color-scheme:light;--bg:#f5f7fc;--panel:#fff;--text:#0c2030;--muted:#64748a;--line:#e1e8f3;--accent:#327af2;--ok:#18764d;--rail:#fff;--rail-text:#14283d;--rail-muted:#65768c;--chip:#edf4ff;--amber:#935a09;--amber-bg:#fff4df;--danger-bg:#fff4f3;--hero:#fff;--hero-text:#12263a;--hero-muted:#64748a}
+  body {background:radial-gradient(ellipse at 85% 0,#eaf1ff 0,transparent 45%),var(--bg);letter-spacing:-.015em}
+  .app-shell {display:block;min-height:100vh;padding:25px 28px;max-width:1460px;margin:auto}
+  .rail {border:1px solid var(--line);border-radius:40px;padding:12px 20px;background:#ffffffed;box-shadow:0 12px 35px #284a850b}
+  .rail-inner {position:static;display:flex;align-items:center;justify-content:space-between;gap:20px}
+  .brand {text-decoration:none;font-size:16px;letter-spacing:-.6px;color:var(--text)}
+  .mark {background:linear-gradient(145deg,#29384d,#080e16);color:#fff;border-radius:12px;box-shadow:inset 0 1px 2px #ffffff70;width:38px;height:38px}
+  nav {display:flex;gap:6px;margin:0;flex-wrap:wrap}
+  nav a {border-radius:20px;color:var(--muted);padding:9px 14px}
+  nav a:hover,nav a:focus-visible,nav a[aria-current] {background:#edf4ff;color:#276de0}
+  .page {padding:48px 12px 24px;max-width:none}
+  header {margin-bottom:30px}
+  h1 {font-weight:550;letter-spacing:-.055em;font-size:clamp(30px,4vw,50px)}
+  .eyebrow {color:#6a7f99;font-weight:600;letter-spacing:.14em}
+  .workspace {background:linear-gradient(115deg,#fff 25%,#eef4ff);border:1px solid var(--line);border-radius:26px;padding:27px 30px;box-shadow:0 14px 32px #284a8506}
+  .workspace h2 {font-size:23px;font-weight:550}
+  .workspace p {line-height:1.7}
+  .control {border-radius:12px;padding:10px 15px;min-height:40px;font-weight:550;box-shadow:0 2px 0 #dce4ef;background:#fff}
+  .workspace .control {background:#fff;color:#18314d;border-color:#dce5f1}
+  .workspace .control:hover {background:#f7faff;color:#2e74e9}
+  .workspace .control.primary,.control.primary {background:linear-gradient(150deg,#609dfc,#337cf0);color:#fff;border-color:#4186f1;box-shadow:0 3px 0 #2463c4}
+  .workspace .control.primary:hover {background:#347df4}
+  .metrics {gap:16px;margin:24px 0 30px}
+  .metric {border-radius:20px;padding:21px 24px;box-shadow:0 7px 22px #23406104}
+  .metric dd {font-size:32px;font-weight:550;letter-spacing:-.05em;margin-top:10px}
+  .grid {gap:24px}
+  .panel {border-radius:24px;box-shadow:0 12px 32px #284a8505;padding:25px}
+  .panel h2 {text-transform:none;letter-spacing:-.02em;font-size:19px;color:var(--text);font-weight:600}
+  .tag {border-radius:7px}
+  dialog {border-radius:24px;border:1px solid #dce5f1;box-shadow:0 30px 100px #152c5140}
+  dialog::backdrop {background:#13234055;backdrop-filter:blur(5px)}
+  .command-box {border-radius:13px;background:#f5f8fe;padding:12px}
+  #terminal-dialog {width:min(680px,calc(100% - 28px));padding:28px}
+  #terminal-dialog h2 {font-size:24px;letter-spacing:-.04em;text-transform:none;color:var(--text)}
+  footer {color:var(--muted)}
+  @media(max-width:760px){.app-shell{padding:14px}.rail{padding:12px 15px;border-radius:22px}.rail-inner{align-items:flex-start;flex-direction:column;gap:10px}nav{gap:0}nav a{padding:7px 10px;font-size:12px}.page{padding:30px 0 15px}.workspace{padding:22px;grid-template-columns:1fr}.workspace-actions{justify-content:flex-start}.metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.metric{padding:17px}.panel{padding:20px}.grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
 <div class="app-shell">
 <aside class="rail">
   <div class="rail-inner">
-    <div class="brand"><span class="mark" aria-hidden="true">TC</span> Team Contract</div>
+    <a class="brand" href="/"><span class="mark" aria-hidden="true">TC</span> team contract</a>
     <nav aria-label="Room navigation">
       <a href="#overview" aria-current="location">Overview</a>
       <a href="#git-panel">GitHub</a>
@@ -342,7 +382,7 @@
 </aside>
 <main class="page" id="overview">
   <header>
-    <div><p class="eyebrow">Team room</p><h1 id="room"></h1></div>
+    <div><p class="eyebrow">Your shared workspace</p><h1 id="room"></h1></div>
     <div class="header-actions">
       <span class="live" id="live"><span class="dot"></span><span id="live-text">Connecting</span></span>
       <button type="button" class="control" id="copy-room">Copy room link</button>
@@ -398,7 +438,7 @@
    <div class="column">
     <section class="panel" id="claim-panel">
       <h2>Claimed work</h2>
-      <p class="meta">What teammates said they are about to change. A notice, not a lock.</p>
+      <p class="meta">The first reservation wins. Supported agent edits pause when a teammate owns the file.</p>
       <ul id="claims"></ul>
     </section>
     <section class="panel" id="file-panel">
@@ -519,16 +559,14 @@
     // Quote room values for the macOS/Linux shell, including embedded quotes.
     const quote = (value) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
     const guides = {
-      menu: {title: "Your project action menu", intro: "After joining, open Terminal in your project folder. Copy this one command, then choose an action by number. Commands run on your computer.", steps: [["Open menu", "Start a task, share, sync, see or release your reservations, check setup, or open Claude.", "python3 coord/team.py"], ["Check setup directly", "Find missing client files, agent configuration, tools, or server connectivity.", "python3 coord/team.py --action doctor"]]},
+      menu: {title: "Your project action menu", intro: "After joining, open Terminal in your project folder. Copy this one command, then choose an action by number. Commands run on your computer.", steps: [["Open workspace", "Launch Claude and your saved sync preference together.", "python3 coord/team.py --action work"], ["Open menu", "Start a task, share, sync, see or release your reservations, check setup, or open Claude.", "python3 coord/team.py"], ["Check setup directly", "Find missing client files, agent configuration, tools, or server connectivity.", "python3 coord/team.py --action doctor"]]},
       setup: {
         title: "Connect your project",
-        intro: "Copy the join command once. After installation, use the numbered menu for everyday actions. You need Python 3 on Mac or Linux.",
+        intro: "Run one command and follow the questions. Setup handles installation and can open your workspace. You need Python 3 and curl on Mac or Linux.",
         steps: [
-          ["Join this room", "Open Terminal inside your project folder and run this. It downloads the Team Contract files from this server, adds them to the folder, and asks for your name.",
-           `d=$(mktemp -d) && curl -fsSL ${quote(location.origin + "/client.zip")} -o "$d/tc.zip" && unzip -q "$d/tc.zip" -d "$d" && python3 "$d/install.py" . --room ${quote(room)} --server ${quote(location.origin)}`],
-          ["Open the action menu", "Start tasks, share commits, sync, see reservations, or check your setup by choosing a number.", "python3 coord/team.py"],
-          ["Connect your GitHub account", "Run this once if you haven’t signed in to the GitHub CLI.", "gh auth login",
-           ["Get GitHub CLI", "https://cli.github.com/"]],
+          ["Join this room", "Open Terminal inside your project folder and run this. It installs Team Contract, asks for your name, helps connect GitHub, and offers to open Claude with background syncing.",
+           `curl -fsSL ${quote(location.origin + "/install.sh")} | bash -s -- --room ${quote(room)} --server ${quote(location.origin)}`],
+          ["Next time: open your workspace", "One command opens Claude, the dashboard, and your saved sync preference. For other actions, choose Action menu on this page.", "python3 coord/team.py --action work"],
         ],
       },
       publish: {
@@ -556,10 +594,9 @@
       guides.setup.steps.unshift(["Get your team’s project", "If you don’t have it on your computer yet, clone the repository from GitHub.",
         null, ["Open project on GitHub", `https://github.com/${roomRepository.repository}`]]);
     } else {
-      guides.setup.steps.push(["Link an existing GitHub repo", "In the project folder, the room owner runs this once and enters the team key. Set it at the bottom of the dashboard first.", `${cli} link`]);
-      guides.setup.steps.push(["Or create a private repo", "Use this if your project has a local Git commit and no GitHub remote. Replace OWNER/REPO with your GitHub username and the new repo name.", `${cli} create OWNER/REPO`]);
+      guides.setup.steps.push(["Before connecting GitHub", "Set a team key at the bottom of this dashboard. Guided setup will ask for that key when linking your existing repository. You can skip GitHub and connect it later."]);
     }
-    guides.setup.steps.push(["Open the project in Claude Code", "Start a new session in your project folder and allow the team-contract tool if prompted."]);
+    guides.setup.steps.push(["Allow the agent connection", "When Claude opens, sign in if needed, trust your project, and allow the team-contract tool. These choices stay in your hands."]);
     const guide = guides[kind];
     $("terminal-title").textContent = guide.title;
     $("terminal-intro").textContent = guide.intro;

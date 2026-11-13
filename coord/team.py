@@ -1,6 +1,8 @@
 """One local menu for Team Contract. No shell commands from the website are executed."""
 import argparse
 import json
+import os
+import tempfile
 import re
 from pathlib import Path
 import shutil
@@ -13,11 +15,102 @@ import git_sync
 
 ROOT = Path(__file__).resolve().parent.parent
 ACTIONS = {
+    "work": "Open my workspace (Claude + optional sync)", "setup": "Finish guided setup",
     "start": "Start a task", "share": "Share committed work", "sync": "Get latest code",
     "watch": "Keep my main branch updated", "status": "Check branch status",
     "claims": "See reserved files", "release": "Release my reservations",
     "doctor": "Check my setup", "room": "Open team dashboard", "claude": "Open Claude Code",
 }
+
+
+def confirm(question, default=False):
+    suffix = " [Y/n]: " if default else " [y/N]: "
+    answer = input(question + suffix).strip().lower()
+    return answer in {"yes", "y"} or (not answer and default)
+
+
+def claude_binary():
+    installed = shutil.which("claude")
+    native = Path.home() / ".local/bin/claude"
+    return installed or (str(native) if native.is_file() and os.access(native, os.X_OK) else None)
+
+
+def setup(me):
+    print("\nLet’s connect your workspace. Your existing files and permissions stay yours.")
+    if not sys.stdin.isatty():
+        print("Open guided setup in an interactive terminal.")
+        return 1
+    if not claude_binary():
+        if confirm("Install Claude Code using Anthropic’s official installer?"):
+            with tempfile.TemporaryDirectory() as directory:
+                script = str(Path(directory) / "claude-install.sh")
+                subprocess.run(["curl", "-fsSL", "--connect-timeout", "15", "--max-time", "120",
+                                "https://claude.ai/install.sh", "-o", script], check=True)
+                subprocess.run(["bash", script], check=True)
+        else:
+            print("You can install Claude later: https://code.claude.com/docs/en/setup")
+    if confirm("Connect GitHub for sharing and syncing?"):
+        if not shutil.which("gh") and shutil.which("brew") and confirm("Install GitHub CLI with Homebrew?"):
+            subprocess.run(["brew", "install", "gh"], check=True)
+        if shutil.which("gh"):
+            logged_in = subprocess.run(["gh", "auth", "status"], capture_output=True).returncode == 0
+            if not logged_in:
+                subprocess.run(["gh", "auth", "login"], check=True)
+            try:
+                git_sync.PROJECT = ROOT
+                repo = git_sync.origin_repository()
+                linked = git_sync.linked_repository(me)
+                if not linked and confirm("Link this project to your team room? You will enter the team key.", True):
+                    if run_git("link"):
+                        print("Linking did not finish. You can try again from the menu.")
+                elif linked and linked["repository"].lower() != repo.lower():
+                    print("This room is linked to a different repository. Check the room before syncing.")
+            except (OSError, ValueError):
+                print("No matching GitHub project found. You can still use shared decisions and file warnings.")
+        else:
+            print("Install GitHub CLI to enable Git features: https://cli.github.com/")
+    me["auto_sync"] = confirm("Keep merged code up to date while your workspace is open?", me.get("auto_sync") is True)
+    (ROOT / "coord/me.json").write_text(json.dumps(me, indent=2) + "\n")
+    doctor(me)
+    if confirm("Open your workspace now?", True):
+        return workspace(me)
+    print("Ready. Next time run: python3 coord/team.py --action work")
+    return 0
+
+
+def workspace(me):
+    if not claude_binary():
+        print("Install Claude Code first: https://code.claude.com/docs/en/setup")
+        return 1
+    perform("room", me)
+    watcher = None
+    log = None
+    try:
+        if me.get("auto_sync") is True:
+            git_sync.PROJECT = ROOT
+            try:
+                repo = git_sync.origin_repository()
+                git_sync.linked_base(me, repo)
+                state = ROOT / "coord/.state"
+                state.mkdir(parents=True, exist_ok=True)
+                log = (state / "sync.log").open("w")
+                watcher = subprocess.Popen([sys.executable, "-u", str(ROOT / "coord/git_sync.py"), "watch"],
+                                           cwd=ROOT, stdout=log, stderr=log)
+                print("Sync is running for this workspace. Status: coord/.state/sync.log")
+                print("Only clean shared branches update. Your task branches and unsaved work stay protected.")
+            except (OSError, ValueError):
+                print("Sync is not connected yet. Run guided setup to link this repository.")
+        return subprocess.run([claude_binary(), "--permission-mode", "default"], cwd=ROOT).returncode
+    finally:
+        if watcher is not None:
+            watcher.terminate()
+            try:
+                watcher.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                watcher.kill()
+                watcher.wait()
+        if log is not None:
+            log.close()
 
 
 def run_git(*args):
@@ -28,7 +121,7 @@ def doctor(me):
     """Report independent checks, without modifying configuration or requiring Git."""
     checks = []
     for binary in ("git", "gh", "claude"):
-        checks.append((bool(shutil.which(binary)), f"{binary} installed"))
+        checks.append((bool(claude_binary() if binary == "claude" else shutil.which(binary)), f"{binary} installed"))
     try:
         settings = json.loads((ROOT / ".claude/settings.json").read_text())
         for event, tool in (("PreToolUse", "Write"), ("PostToolUse", "Write"), ("PostToolUse", "Read")):
@@ -57,6 +150,10 @@ def doctor(me):
 
 
 def perform(action, me):
+    if action == "setup":
+        return setup(me)
+    if action == "work":
+        return workspace(me)
     if action == "start":
         branch = input("Task branch (for example ali/welcome-message): ").strip()
         return run_git("start", branch) if branch else 0
@@ -84,10 +181,10 @@ def perform(action, me):
             result = git_sync.api(me, "POST", "/claims/release", {"author": me["name"]})
             print(f"Released {result['released']} reservation(s).")
     elif action == "claude":
-        if not shutil.which("claude"):
+        if not claude_binary():
             print("Claude Code is not installed.")
             return 1
-        return subprocess.run(["claude", "--permission-mode", "default"], cwd=ROOT).returncode
+        return subprocess.run([claude_binary(), "--permission-mode", "default"], cwd=ROOT).returncode
     return 0
 
 

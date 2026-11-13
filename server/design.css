@@ -1,0 +1,5 @@
+/* Shared visual language for the public site and team workspace. */
+body { --brand-blue:#347df4; --brand-ink:#0b1c2b; }
+button,a,input,select,textarea { -webkit-tap-highlight-color:transparent; }
+button[hidden],a[hidden] { display:none!important; }
+::selection { background:#cdddff; color:#0c264a; }

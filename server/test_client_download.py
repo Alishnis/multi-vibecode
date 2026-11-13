@@ -72,3 +72,29 @@ class ClientDownloadTest(unittest.TestCase):
             hooks = json.loads((project / ".claude/settings.json").read_text())["hooks"]
             self.assertIn("UserPromptSubmit", hooks)
             self.assertIn("team-contract", json.loads((project / ".mcp.json").read_text())["mcpServers"])
+
+    def test_public_homepage_and_legacy_room_links(self):
+        client = TestClient(server.app)
+        self.assertIn('Build together.', client.get('/').text)
+        for route in ('/app?room=demo', '/?room=demo'):
+            self.assertIn('id="workspace-title"', client.get(route).text)
+        self.assertIn('--guided', client.get('/install.sh').text)
+        self.assertIn('--brand-blue', client.get('/design.css').text)
+
+    def test_reinstall_preserves_sync_preference_and_other_agent_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / 'coord').mkdir()
+            (project / '.claude').mkdir()
+            (project / 'coord/me.json').write_text(json.dumps({'name': 'Mei', 'room': 'demo',
+                'server': 'http://127.0.0.1:9', 'auto_sync': True, 'ai_summary': False}))
+            (project / '.claude/settings.json').write_text(json.dumps({'permissions': {'deny': ['Bash(rm:*)']}}))
+            run = subprocess.run([sys.executable, str(server.PROJECT_ROOT / 'install.py'), str(project)],
+                                 capture_output=True, text=True, timeout=60)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            saved = json.loads((project / 'coord/me.json').read_text())
+            self.assertTrue(saved['auto_sync'])
+            self.assertFalse(saved['ai_summary'])
+            settings = json.loads((project / '.claude/settings.json').read_text())
+            self.assertEqual(settings['permissions'], {'deny': ['Bash(rm:*)']})
+            self.assertFalse((project / '.claude/settings.local.json').exists())

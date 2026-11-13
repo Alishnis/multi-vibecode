@@ -21,6 +21,7 @@ Uses only Python's built-in libraries.
 import argparse
 import json
 import shutil
+import subprocess
 import sys
 import urllib.parse
 from pathlib import Path
@@ -180,6 +181,7 @@ def main() -> None:
     parser.add_argument("--name", help="your name, shown to teammates")
     parser.add_argument("--room", help="the room code your team shares")
     parser.add_argument("--server", help="the coordination server address")
+    parser.add_argument("--guided", action="store_true", help="configure GitHub and launch the workspace after installing")
     args = parser.parse_args()
 
     target = Path(args.project).expanduser().resolve()
@@ -206,17 +208,22 @@ def main() -> None:
     check_server(me)
 
     dashboard = me["server"] + "/?" + urllib.parse.urlencode({"room": me["room"]})
-    print(
-        f"\nTeam Contract is installed. Open your room: {dashboard}\n"
-        "  Open the action menu: python3 coord/team.py\n"
-        "  Next: open a new Claude Code session in your project folder.\n"
-        f"  Allow the '{TOOL_NAME}' tool when Claude Code asks.\n"
-        "  If Claude Code never asks, approve it in this file:\n"
-        f"       {target / '.claude/settings.local.json'}\n"
-        f'     with this content:  {{"enabledMcpjsonServers": ["{TOOL_NAME}"]}}\n'
-        "\nTo share the setup, commit coord/, .claude/settings.json and .mcp.json.\n"
-        "Each teammate runs the installer once in their own checkout."
-    )
+    if args.guided:
+        print(f"\nTeam Contract is installed. Your room: {dashboard}")
+    else:
+        print(
+            f"\nTeam Contract is installed. Open your room: {dashboard}\n"
+            "  Open the action menu: python3 coord/team.py\n"
+            "  Next: open a new Claude Code session in your project folder.\n"
+            f"  Allow the '{TOOL_NAME}' tool when Claude Code asks.\n"
+            "  If Claude Code never asks, approve it in this file:\n"
+            f"       {target / '.claude/settings.local.json'}\n"
+            f'     with this content:  {{"enabledMcpjsonServers": ["{TOOL_NAME}"]}}\n'
+            "\nTo share the setup, commit coord/, .claude/settings.json and .mcp.json.\n"
+            "Each teammate runs the installer once in their own checkout."
+        )
+    if args.guided:
+        subprocess.run([sys.executable, str(target / "coord/team.py"), "--action", "setup"], cwd=target, check=True)
 
 
 if __name__ == "__main__":
