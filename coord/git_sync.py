@@ -20,6 +20,11 @@ from tc_http import urlopen  # noqa: E402
 
 PROJECT = Path(__file__).resolve().parent.parent
 REPOSITORY = r"[a-zA-Z0-9][a-zA-Z0-9-]{0,38}/[a-zA-Z0-9_.-]{1,100}"
+CLI = "python3 coord/git_sync.py"
+
+
+def notice(message: str) -> None:
+    print(f"[Team Contract] {message}", flush=True)
 
 
 def command(*args: str) -> str:
@@ -27,11 +32,14 @@ def command(*args: str) -> str:
     try:
         run = subprocess.run(args, cwd=PROJECT, capture_output=True, text=True, env=env, timeout=90)
     except FileNotFoundError:
-        raise ValueError(f"Install {args[0]} before running this command.") from None
+        name = "GitHub CLI (gh)" if args[0] == "gh" else args[0]
+        raise ValueError(f"Install {name}, then try again.") from None
     except subprocess.TimeoutExpired:
         raise ValueError(f"{args[0]} {args[1]} timed out. Check the remote before retrying.") from None
     if run.returncode:
         detail = re.sub(r"https?://[^\s/]+@", "https://[redacted]@", run.stderr.strip())
+        if args[0] == "gh" and "gh auth login" in detail:
+            raise ValueError("Connect your GitHub account with gh auth login, then try again.")
         raise ValueError(detail or f"{args[0]} {args[1]} failed.")
     return run.stdout.strip()
 
@@ -103,13 +111,14 @@ def linked_repository(me: dict) -> dict | None:
 
 
 def link(me: dict, repo: str, token: str) -> None:
-    info = json.loads(command("gh", "repo", "view", repo, "--json", "defaultBranchRef"))
+    info = json.loads(command("gh", "repo", "view", f"github.com/{repo}", "--json", "defaultBranchRef"))
     branch = info.get("defaultBranchRef")
     if not branch:
         raise ValueError("Create an initial commit on GitHub before linking this repository.")
     base = branch["name"]
     api(me, "PUT", "/git", {"repository": repo, "base_branch": base}, token)
-    print(f"Linked room {me['room']} to {repo} (base branch: {base}).")
+    notice(f"Room {me['room']} is connected to {repo}. Reviewed work will go into {base}.")
+    print(f"  Next: run {CLI} start my-task to begin a task.")
 
 
 def create_repository(me: dict, repo: str) -> None:
@@ -127,7 +136,7 @@ def create_repository(me: dict, repo: str) -> None:
     query = urllib.parse.urlencode({"room": me["room"]})
     api(me, "GET", f"/git/link-access?{query}", token=token)
     command("gh", "repo", "create", repo, "--private", "--source", ".", "--remote", "origin", "--push")
-    print(f"Created private repository https://github.com/{repo}.", flush=True)
+    notice(f"Created private repository https://github.com/{repo}.")
     link(me, origin_repository(), token)
 
 
@@ -135,46 +144,62 @@ def open_pr(repo: str, branch: str, base: str) -> dict | None:
     if branch == base:
         return None
     matches = json.loads(command(
-        "gh", "pr", "list", "--repo", repo, "--head", branch, "--base", base,
-        "--state", "open", "--json", "number,url,isCrossRepository",
+        "gh", "pr", "list", "--repo", f"github.com/{repo}", "--head", branch, "--base", base,
+        "--state", "open", "--json", "number,url,isCrossRepository,isDraft,reviewDecision,latestReviews",
     ))
     return next((pr for pr in matches if not pr["isCrossRepository"]), None)
 
 
-def publish(repo: str, branch: str, base: str, ahead: int, title: str | None) -> dict:
+def publish(repo: str, branch: str, base: str, ahead: int, title: str | None, ready: bool = False) -> dict:
     if branch == base:
         raise ValueError(f"Switch to a task branch before publishing. {base} is the review target.")
     if ahead == 0:
-        raise ValueError(f"There are no commits on this branch to propose against {base}.")
-    existing = open_pr(repo, branch, base)
+        raise ValueError("There are no new commits to share. Commit the changes you want to publish, then try again.")
+    pr = open_pr(repo, branch, base)
     if command("git", "status", "--porcelain"):
-        print("Only committed changes will be pushed.", file=sys.stderr)
-    command(
-        "git", "push", "--no-follow-tags", "--recurse-submodules=no", "origin",
-        f"refs/heads/{branch}:refs/heads/{branch}",
-    )
-    print(f"Pushed {branch} to {repo}.", flush=True)
-    if existing:
-        return existing
-    title = title or command("git", "log", "-1", "--format=%s") or branch
+        notice("You have uncommitted edits. This push includes your saved commits only.")
     try:
-        url = command(
-            "gh", "pr", "create", "--repo", repo, "--base", base, "--head", branch,
-            "--draft", "--title", title, "--body", "Task branch shared with Team Contract.",
+        command(
+            "git", "push", "--set-upstream", "--no-follow-tags", "--recurse-submodules=no", "origin",
+            f"refs/heads/{branch}:refs/heads/{branch}",
         )
     except ValueError as error:
-        # Another publish may have created the PR between list and create.
-        existing = open_pr(repo, branch, base)
-        if existing:
-            return existing
-        raise ValueError(f"The branch is on GitHub. Retry publish to create its PR. {error}") from error
-    return {"number": int(url.rstrip("/").rsplit("/", 1)[1]), "url": url}
+        if any(reason in str(error) for reason in ("non-fast-forward", "(fetch first)")):
+            raise ValueError(
+                f"GitHub already has commits on {branch} that are missing from your copy. "
+                f"Run git fetch origin, then compare your branch with origin/{branch} before publishing again. "
+                f"If it belongs to someone else's task, rename your local branch to a unique name."
+            ) from None
+        raise
+    notice(f"Your commits on {branch} are on GitHub.")
+    if pr is None:
+        title = title or command("git", "log", "-1", "--format=%s") or branch
+        try:
+            url = command(
+                "gh", "pr", "create", "--repo", f"github.com/{repo}", "--base", base, "--head", branch,
+                *([] if ready else ["--draft"]), f"--title={title}", "--body", "Task branch shared with Team Contract.",
+            )
+            return {"number": int(url.rstrip("/").rsplit("/", 1)[1]), "url": url, "isDraft": not ready}
+        except ValueError as error:
+            # Another publish may have created the PR between list and create.
+            pr = open_pr(repo, branch, base)
+            if pr is None:
+                raise ValueError(f"Your commits are on GitHub. Run publish again to open the pull request. {error}") from error
+    elif has_approval(pr):
+        # A push may dismiss a previous approval. Read the current review state.
+        pr = open_pr(repo, branch, base)
+        if pr is None:
+            raise ValueError("The pull request closed during the push. Check it on GitHub before publishing again.")
+    if ready and pr.get("isDraft"):
+        command("gh", "pr", "ready", str(pr["number"]), "--repo", f"github.com/{repo}")
+        pr = {**pr, "isDraft": False}
+    return pr
 
 
 def linked_base(me: dict, repo: str) -> str:
     linked = linked_repository(me)
     if not linked:
-        raise ValueError("The room has no repository. Ask the room owner to run git_sync.py link.")
+        raise ValueError(f"This room is not connected to GitHub. Ask the room owner to run {CLI} link.")
     if linked["repository"] != repo:
         raise ValueError("Origin does not match the room's linked repository.")
     base = linked["base_branch"]
@@ -191,33 +216,73 @@ def fetch_base(base: str) -> str:
     return ref
 
 
-def sync(me: dict, repo: str, action: str, title: str | None) -> None:
+def start_task(repo: str, base: str, branch: str) -> None:
+    if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/-]{0,249}", branch):
+        raise ValueError("Use a branch name like todo-api or ali/todo-api.")
+    if branch == base:
+        raise ValueError(f"Choose a new name. {base} is the shared branch.")
+    command("git", "check-ref-format", "--branch", branch)
+    if command("git", "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"):
+        raise ValueError("You have local edits. Commit or stash them before starting a new task.")
+    if command("git", "ls-remote", "--heads", "origin", f"refs/heads/{branch}"):
+        raise ValueError(f"{branch} already exists on {repo}. Pick a unique name for this task.")
+    ref = fetch_base(base)
+    command("git", "switch", "--no-track", "--no-overwrite-ignore", "-c", branch, ref)
+    notice(f"Started {branch} from the latest shared {base}.")
+    print(f"  Next: make and commit your edits, then run {CLI} publish --ready.")
+
+
+def pull_request_state(pr: dict | None) -> str | None:
+    if not pr:
+        return None
+    if pr.get("isDraft"):
+        return "draft"
+    if has_approval(pr):
+        return "approved"
+    decision = pr.get("reviewDecision")
+    if decision == "CHANGES_REQUESTED" or (
+        not decision and any(review["state"] == "CHANGES_REQUESTED" for review in pr.get("latestReviews") or [])
+    ):
+        return "changes_requested"
+    return "in_review"
+
+
+def sync(me: dict, repo: str, action: str, title: str | None, ready: bool = False) -> None:
     base = linked_base(me, repo)
     branch = command("git", "branch", "--show-current")
     if not branch:
         raise ValueError("Switch to a named branch before checking or publishing.")
     if action == "publish" and branch == base:
-        raise ValueError(f"Switch to a task branch before publishing. {base} is the review target.")
+        raise ValueError(f"{base} is the shared branch. Run {CLI} start my-task before making and publishing edits.")
     ref = fetch_base(base)
     behind, ahead = map(int, command(
         "git", "rev-list", "--left-right", "--count", f"{ref}...HEAD",
     ).split())
     if action == "publish":
-        pr = publish(repo, branch, base, ahead, title)
+        pr = publish(repo, branch, base, ahead, title, ready)
     else:
         pr = open_pr(repo, branch, base)
-    print(f"{branch}: {ahead} ahead, {behind} behind origin/{base}.")
+    state = pull_request_state(pr)
+    print(f"  Your branch: {branch}. Commits ahead of {base}: {ahead}. Behind: {behind}.")
     if pr:
-        print(f"Pull request: {pr['url']}")
+        print(f"  Pull request #{pr['number']}: {pr['url']}")
+        if state == "draft":
+            print(f"  Next: run {CLI} publish --ready when you're ready for a teammate to review.")
+        elif state == "in_review":
+            print(f"  Next: ask a teammate to review the changes at {pr['url']}/files")
+        elif state == "approved":
+            print("  Next: merge on GitHub when the repository's requirements are met.")
+        else:
+            print("  Next: open the pull request to see the reviewer's feedback.")
     try:
         api(me, "POST", "/git/activity", {
             "author": me["name"], "repository": repo, "base_branch": base,
             "branch": branch, "ahead": ahead, "behind": behind,
-            "pr_number": pr["number"] if pr else None,
+            "pr_number": pr["number"] if pr else None, "pr_state": state,
         })
     except ValueError as error:
-        raise ValueError(f"Dashboard status was not sent. Run status to retry. {error}") from error
-    print("Status sent to the Team Contract dashboard.")
+        raise ValueError(f"The dashboard could not be updated. Run {CLI} status to retry. {error}") from error
+    notice("Branch status shared with your room.")
 
 
 def pull_requests(repo: str, base: str, state: str, fields: str) -> list[dict]:
@@ -270,7 +335,7 @@ def update_checkout(base: str, target: str) -> str:
         if (PROJECT / command("git", "rev-parse", "--git-path", operation)).exists():
             return "Finish your current Git operation before syncing."
     if command("git", "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"):
-        return "Local changes detected. Commit or stash them before syncing."
+        return "Local changes detected. Commit or set them aside with git stash, then try syncing again."
     ahead, behind = map(int, command(
         "git", "rev-list", "--left-right", "--count", f"HEAD...{target}",
     ).split())
@@ -280,31 +345,45 @@ def update_checkout(base: str, target: str) -> str:
     return f"Updated local {base} to {target[:12]}."
 
 
-def watch(me: dict, interval: int, notify_only: bool) -> None:
-    print("Watching the linked repository. Press Ctrl+C to stop.", flush=True)
+def watch(me: dict, interval: int, notify_only: bool, once: bool = False) -> None:
+    if once:
+        notice("Checking GitHub for approved changes…")
+    else:
+        mode = "show notices only" if notify_only else "update your clean shared branch after an approved merge"
+        notice(f"Checking GitHub about every {interval}s to {mode}. Press Ctrl+C to stop.")
     approvals: set[tuple[str, str, int, str]] = set()
     last_status = ""
+    connected = False
     while True:
         try:
             repo = origin_repository()
             base = linked_base(me, repo)
             current = {(repo, base, number, head) for number, head in approved_requests(repo, base).items()}
             for _, _, number, _ in sorted(current - approvals):
-                print(f"[Team Contract] PR #{number} approved. Waiting for merge. "
-                      f"https://github.com/{repo}/pull/{number}", flush=True)
+                notice(f"PR #{number} approved. Waiting for someone to merge it on GitHub. "
+                       f"https://github.com/{repo}/pull/{number}")
             approvals = current
             update = merged_update(repo, base, fetch_base(base))
             status = ""
             if update:
                 target, numbers = update
                 prs = ", ".join(f"#{number}" for number in numbers)
-                result = "Run git_sync.py watch without --notify-only to sync." if notify_only else update_checkout(base, target)
+                result = (f"To apply the update, run {CLI} watch --once."
+                          if notify_only else update_checkout(base, target))
                 status = f"Approved PRs merged into {base}: {prs}. {result}"
+            if not connected and not status and not current:
+                notice(f"No approved updates to apply for {base} in {repo}.")
+            connected = True
         except (OSError, ValueError, KeyError) as error:
-            status = f"Watch check failed: {error}"
+            if once:
+                raise
+            status = f"Could not check GitHub. Will retry in about {interval}s. {error}"
+            connected = False
         if status and status != last_status:
-            print(f"[Team Contract] {status}", flush=True)
+            notice(status)
         last_status = status
+        if once:
+            return
         time.sleep(interval)
 
 
@@ -314,32 +393,43 @@ def main() -> None:
     subparsers.add_parser("link", help="link this origin to the room (room owner)")
     create_parser = subparsers.add_parser("create", help="create a private GitHub repo from committed local work and link it")
     create_parser.add_argument("repository", metavar="OWNER/REPO")
+    start_parser = subparsers.add_parser("start", help="start a new task from the latest shared branch")
+    start_parser.add_argument("branch", help="a unique branch name, for example ali/todo-api")
     subparsers.add_parser("status", help="fetch the base branch and report branch status")
     publish_parser = subparsers.add_parser("publish", help="push committed work and open or reuse its PR")
-    publish_parser.add_argument("--title", help="title for a new draft PR")
+    publish_parser.add_argument("--title", help="title for a new pull request")
+    publish_parser.add_argument("--ready", action="store_true", help="make the pull request ready for review")
     watch_parser = subparsers.add_parser("watch", help="notify about approved PRs and sync after merge")
     watch_parser.add_argument("--interval", type=int, default=30, help="seconds between checks (minimum 15)")
     watch_parser.add_argument("--notify-only", action="store_true", help="show updates without applying them")
+    watch_parser.add_argument("--once", action="store_true", help="check once, apply eligible updates, and exit")
     args = parser.parse_args()
     if args.action == "watch" and args.interval < 15:
         parser.error("--interval must be at least 15 seconds")
     try:
-        me = json.loads((PROJECT / "coord/me.json").read_text())
+        config = PROJECT / "coord/me.json"
+        if not config.is_file():
+            raise ValueError("Install Team Contract for this project first. See Connect your project in the room dashboard.")
+        me = json.loads(config.read_text())
         if command("git", "rev-parse", "--show-toplevel") != str(PROJECT):
             raise ValueError("Install Team Contract at the root of the Git repository.")
         if args.action == "create":
             create_repository(me, args.repository)
         elif args.action == "link":
             link(me, origin_repository(), approval_token())
+        elif args.action == "start":
+            repo = origin_repository()
+            start_task(repo, linked_base(me, repo), args.branch)
         elif args.action == "watch":
             linked_base(me, origin_repository())
-            watch(me, args.interval, args.notify_only)
+            watch(me, args.interval, args.notify_only, args.once)
         else:
-            sync(me, origin_repository(), args.action, getattr(args, "title", None))
+            sync(me, origin_repository(), args.action, getattr(args, "title", None), getattr(args, "ready", False))
     except (OSError, ValueError, KeyError) as error:
-        sys.exit(f"Stopped: {error}")
+        sys.exit(f"[Team Contract] {error}")
     except KeyboardInterrupt:
-        print("\nStopped watching.")
+        print()
+        notice("Stopped.")
 
 
 if __name__ == "__main__":

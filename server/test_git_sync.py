@@ -37,9 +37,28 @@ class RoomGitTest(unittest.TestCase):
         self.assertEqual(len(state["activity"]), 1)
         self.assertEqual(state["activity"][0]["pr_number"], 17)
         self.assertEqual(state["activity"][0]["behind"], 0)
+        self.assertIsNone(state["activity"][0]["pr_state"])
+        self.assertEqual(client.post("/git/activity", json={**activity, "pr_state": "in_review"}).status_code, 200)
+        self.assertEqual(client.get("/state?room=demo").json()["git"]["activity"][0]["pr_state"], "in_review")
 
 
 class PublishTest(unittest.TestCase):
+    def test_ready_publish_creates_reviewable_pr_or_promotes_existing_draft(self):
+        url = "https://github.com/example/todos/pull/17"
+        with patch.object(git_sync, "command", side_effect=["", "", url]) as run, \
+                patch.object(git_sync, "open_pr", return_value=None):
+            pr = git_sync.publish("example/todos", "ali/api", "main", 1, "API work", ready=True)
+        self.assertEqual(git_sync.pull_request_state(pr), "in_review")
+        self.assertIn("--set-upstream", run.call_args_list[1].args)
+        self.assertNotIn("--draft", run.call_args.args)
+
+        draft = {"number": 17, "url": url, "isDraft": True}
+        with patch.object(git_sync, "command", return_value="") as run, \
+                patch.object(git_sync, "open_pr", return_value=draft):
+            pr = git_sync.publish("example/todos", "ali/api", "main", 1, None, ready=True)
+        run.assert_called_with("gh", "pr", "ready", "17", "--repo", "github.com/example/todos")
+        self.assertEqual(git_sync.pull_request_state(pr), "in_review")
+
     def test_create_private_repository_checks_approval_before_push(self):
         commands = []
         operations = []
@@ -102,7 +121,7 @@ class PublishTest(unittest.TestCase):
                     return commands(*args)
                 if args[:3] == ("gh", "pr", "list"):
                     return json.dumps([{"number": 17, "url": "https://github.com/example/todos/pull/17",
-                                        "isCrossRepository": False}] if pr_calls else [])
+                                        "isCrossRepository": False, "isDraft": True}] if pr_calls else [])
                 self.assertEqual(args[:3], ("gh", "pr", "create"))
                 self.assertIn("--draft", args)
                 pr_calls.append(args)
@@ -118,12 +137,14 @@ class PublishTest(unittest.TestCase):
             with patch.object(git_sync, "PROJECT", repo), patch.object(git_sync, "command", fake_command), \
                     patch.object(git_sync, "api", fake_api):
                 git_sync.sync(me, "example/todos", "publish", "API work")
+                self.assertEqual(git("rev-parse", "--abbrev-ref", "@{upstream}"), "origin/ali/api")
                 git("commit", "-q", "--allow-empty", "-m", "Follow-up")
                 git_sync.sync(me, "example/todos", "publish", None)
                 local_head = git("rev-parse", "HEAD")
                 git("switch", "-q", "main")
                 git("commit", "-q", "--allow-empty", "-m", "Teammate work")
                 git("push", "-q", "origin", "main")
+                latest_shared = git("rev-parse", "HEAD")
                 git("switch", "-q", "ali/api")
                 git_sync.sync(me, "example/todos", "status", None)
                 self.assertEqual(git("rev-parse", "HEAD"), local_head)
@@ -131,3 +152,12 @@ class PublishTest(unittest.TestCase):
                 self.assertEqual(reports[-1]["behind"], 1)
                 self.assertEqual([r["pr_number"] for r in reports], [17, 17, 17])
                 self.assertEqual(len(pr_calls), 1)
+                with self.assertRaisesRegex(ValueError, "local edits"):
+                    git_sync.start_task("example/todos", "main", "ali/next")
+                (repo / "unfinished.txt").unlink()
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    git_sync.start_task("example/todos", "main", "ali/api")
+                git_sync.start_task("example/todos", "main", "ali/next")
+                self.assertEqual(git("branch", "--show-current"), "ali/next")
+                self.assertEqual(git("rev-parse", "HEAD"), latest_shared)
+                self.assertEqual(git("rev-parse", "ali/api"), local_head)

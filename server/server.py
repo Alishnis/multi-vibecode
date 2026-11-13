@@ -167,6 +167,7 @@ def create_tables() -> None:
         add_column(conn, "conflicts", "resolved_by", "TEXT")
         add_column(conn, "conflicts", "resolved_at", "TEXT")
         add_column(conn, "people", "contract_seen_at", "TEXT")
+        add_column(conn, "git_activity", "pr_state", "TEXT")
 
 
 def add_column(conn: sqlite3.Connection, table: str, column: str, kind: str) -> None:
@@ -392,6 +393,7 @@ class GitActivity(RoomAuthor):
     ahead: int = Field(ge=0)
     behind: int = Field(ge=0)
     pr_number: int | None = Field(default=None, gt=0)
+    pr_state: Literal["draft", "in_review", "changes_requested", "approved"] | None = None
 
 
 class FileActivity(RoomAuthor):
@@ -810,7 +812,7 @@ def get_state(room: RoomParam) -> dict:
         retired = load_retired(room, conn)
         has_key = room_has_key(conn, room)
         git_activity = [dict(row) for row in conn.execute(
-            "SELECT author, branch, ahead, behind, pr_number, checked_at "
+            "SELECT author, branch, ahead, behind, pr_number, pr_state, checked_at "
             "FROM git_activity WHERE room = ? ORDER BY author", (room,),
         )]
         file_edits = [dict(row) for row in conn.execute(
@@ -877,14 +879,14 @@ def report_git_activity(activity: GitActivity) -> dict:
             raise HTTPException(409, "The local repository and base branch must match the linked room.")
         conn.execute(
             """
-            INSERT INTO git_activity (room, author, branch, ahead, behind, pr_number, checked_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO git_activity (room, author, branch, ahead, behind, pr_number, pr_state, checked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (room, author) DO UPDATE SET
                 branch = excluded.branch, ahead = excluded.ahead, behind = excluded.behind,
-                pr_number = excluded.pr_number, checked_at = excluded.checked_at
+                pr_number = excluded.pr_number, pr_state = excluded.pr_state, checked_at = excluded.checked_at
             """,
             (activity.room, activity.author, activity.branch, activity.ahead,
-             activity.behind, activity.pr_number, now()),
+             activity.behind, activity.pr_number, activity.pr_state if activity.pr_number else None, now()),
         )
     return {"ok": True}
 

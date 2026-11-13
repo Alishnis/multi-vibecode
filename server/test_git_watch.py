@@ -7,6 +7,18 @@ from coord import git_sync
 
 
 class GitWatchTest(unittest.TestCase):
+    def test_one_check_applies_approved_merge_and_exits_without_sleep(self):
+        with patch.object(git_sync, "origin_repository", return_value="example/todos"), \
+                patch.object(git_sync, "linked_base", return_value="main"), \
+                patch.object(git_sync, "approved_requests", return_value={}), \
+                patch.object(git_sync, "fetch_base", return_value="origin/main"), \
+                patch.object(git_sync, "merged_update", return_value=("merged-sha", [7])), \
+                patch.object(git_sync, "update_checkout", return_value="Updated local main.") as update, \
+                patch.object(git_sync.time, "sleep") as sleep:
+            git_sync.watch({}, 30, notify_only=False, once=True)
+        update.assert_called_once_with("main", "merged-sha")
+        sleep.assert_not_called()
+
     def test_notice_and_fast_forward_only_after_approved_merge(self):
         directory = self.enterContext(tempfile.TemporaryDirectory())
         checkout = Path(directory)

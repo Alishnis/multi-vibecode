@@ -195,15 +195,16 @@ def main() -> None:
     update_gitignore(target)
     check_server(me)
 
+    dashboard = me["server"] + "/?" + urllib.parse.urlencode({"room": me["room"]})
     print(
-        "\nDone. Two things left, both yours to do:\n"
-        "  1. Open a NEW Claude Code session in this folder. If it asks whether to\n"
-        f"     allow the '{TOOL_NAME}' tool, say yes.\n"
-        "  2. If it does not ask, approve the tool by creating this file:\n"
+        f"\nTeam Contract is installed. Open your room: {dashboard}\n"
+        "  Next: open a new Claude Code session in your project folder.\n"
+        f"  Allow the '{TOOL_NAME}' tool when Claude Code asks.\n"
+        "  If Claude Code never asks, approve it in this file:\n"
         f"       {target / '.claude/settings.local.json'}\n"
         f'     with this content:  {{"enabledMcpjsonServers": ["{TOOL_NAME}"]}}\n'
-        "\nCommit coord/, .claude/settings.json and .mcp.json so teammates get them.\n"
-        "Each teammate then runs this installer once to write their own coord/me.json."
+        "\nTo share the setup, commit coord/, .claude/settings.json and .mcp.json.\n"
+        "Each teammate runs the installer once in their own checkout."
     )
 
 

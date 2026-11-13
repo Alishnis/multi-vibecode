@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Team contract</title>
+<title>Team Contract</title>
 <style>
   :root {
     --bg: #f6f7f9;
@@ -45,6 +45,7 @@
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html { font-size: 18px; }
   body {
     margin: 0;
@@ -182,10 +183,11 @@
 
   :root {
     color-scheme: light dark;
-    --bg: #f4f6fa; --panel: #fff; --text: #182137; --muted: #55627a;
-    --line: #dce3ef; --accent: #4842be; --ok: #18764d; --rail: #171b32;
-    --rail-text: #eff0ff; --rail-muted: #b9c0dd; --chip: #eeedfd;
+    --bg: #f4f5f9; --panel: #fff; --text: #181a30; --muted: #556079;
+    --line: #dfe2ec; --accent: #5142be; --ok: #18764d; --rail: #151427;
+    --rail-text: #f6f4ff; --rail-muted: #c1bed8; --chip: #efedff;
     --amber: #935a09; --amber-bg: #fff4df; --danger-bg: #fff4f3;
+    --hero: #211b40; --hero-text: #f8f6ff; --hero-muted: #d0c9e8;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -210,13 +212,59 @@
   }
   nav { display: grid; gap: 4px; margin-top: 35px; }
   nav a { text-decoration: none; color: var(--rail-muted); padding: 10px 12px; border-radius: 8px; font-size: .88rem; }
-  nav a:hover, nav a:focus-visible { background: #303653; color: white; }
+  nav a:hover, nav a:focus-visible, nav a[aria-current] { background: #312b4a; color: white; }
   .page { width: 100%; max-width: 1380px; padding: 34px clamp(22px, 4vw, 56px) 32px; }
-  header { margin-bottom: 24px; padding: 0; border: 0; align-items: flex-start; justify-content: space-between; }
+  header { margin-bottom: 24px; padding: 0; border: 0; align-items: center; justify-content: space-between; }
   h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 760; line-height: 1.15; letter-spacing: -.05em; overflow-wrap: anywhere; }
   .eyebrow { font-size: .73rem; font-weight: 750; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 8px; }
   .live { padding: 6px 11px; border-radius: 20px; border: 1px solid var(--line); background: var(--panel); }
   .live .dot { width: 7px; height: 7px; animation: none; }
+  .header-actions, .workspace-actions, .repo-actions, .git-links {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  }
+  .workspace {
+    margin-bottom: 18px; border-radius: 16px; padding: clamp(18px, 3vw, 28px);
+    background: var(--hero); color: var(--hero-text);
+    display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1fr); gap: 16px 24px;
+    align-items: center;
+  }
+  .workspace h2 { color: inherit; font-size: 1.25rem; letter-spacing: -.025em; text-transform: none; margin: 0 0 5px; }
+  .workspace p { color: var(--hero-muted); margin: 0; font-size: .91rem; max-width: 46ch; }
+  .workspace-actions { justify-content: flex-end; }
+  .control {
+    display: inline-flex; align-items: center; justify-content: center; min-height: 36px;
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px;
+    background: var(--panel); color: var(--text); font: inherit; font-weight: 650;
+    font-size: .84rem; text-decoration: none; cursor: pointer;
+  }
+  .control:hover { border-color: var(--accent); color: var(--accent); }
+  .workspace .control { background: #32294d; border-color: #62577e; color: var(--hero-text); }
+  .workspace .control:hover { background: #453861; }
+  .workspace .control.primary { background: #e6dfff; border-color: #e6dfff; color: #22183b; }
+  .workspace .control.primary:hover { background: #f6f0ff; }
+  .workspace .control:focus-visible { outline-color: #e6dfff; }
+  .repo-actions { margin: 0 0 12px; }
+  .git-row { display: grid; gap: 4px; }
+  .git-row .git-links a { margin-left: 0; }
+  .git-row .git-links a:last-child { font-weight: 650; }
+  .git-pill {
+    display: inline-block; width: fit-content; padding: 2px 7px; margin-left: 7px;
+    border-radius: 5px; font-size: .75rem; background: var(--chip); color: var(--accent);
+  }
+  .git-pill.approved { color: var(--ok); }
+  .git-pill.changes_requested { color: var(--amber); background: var(--amber-bg); }
+  #terminal-dialog { width: min(600px, calc(100% - 28px)); max-height: calc(100dvh - 28px); }
+  .terminal-steps { display: grid; gap: 14px; margin: 15px 0; padding-left: 20px; }
+  .terminal-steps li { padding-left: 3px; overflow-wrap: anywhere; }
+  .terminal-steps .hint { margin: 2px 0 6px; }
+  .terminal-steps a { color: var(--accent); }
+  .command-box {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+    gap: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px;
+  }
+  .command-box code { font-size: .8rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .terminal-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .copy-feedback { color: var(--muted); font-size: .85rem; }
   .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
   .metric { margin: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 12px 15px; min-width: 0; }
   .metric dt { color: var(--muted); font-size: .78rem; }
@@ -242,7 +290,7 @@
   .file-row code { font-size: .86rem; }
   .file-overlap { color: var(--amber); background: var(--amber-bg); border-radius: 5px; padding: 2px 6px; margin-left: 6px; font-size: .7rem; font-weight: 700; white-space: nowrap; }
   .answer-primary { background: var(--chip); }
-  .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .side { display: flex; flex-direction: column; gap: 8px; }
   .side .action { align-self: flex-start; margin-top: auto; }
   .action.small { padding: 3px 9px; font-size: .78rem; }
@@ -260,6 +308,8 @@
     .app-shell { grid-template-columns: 164px minmax(0, 1fr); }
     .rail { padding: 23px 13px; }
     .grid { grid-template-columns: minmax(0, 1fr); }
+    .workspace { grid-template-columns: minmax(0, 1fr); }
+    .workspace-actions { justify-content: flex-start; }
   }
   @media (max-width: 620px) {
     .app-shell { display: block; }
@@ -272,7 +322,7 @@
     .decision { grid-template-columns: minmax(0, 1fr); }
     .decision .retire { justify-self: start; }
     .column { display: contents; }
-    #file-panel { grid-row: 1; }
+    #terminal-dialog { padding: 18px; }
   }
 </style>
 </head>
@@ -282,22 +332,37 @@
   <div class="rail-inner">
     <div class="brand"><span class="mark" aria-hidden="true">TC</span> Team Contract</div>
     <nav aria-label="Room navigation">
-      <a href="#overview">Overview</a>
+      <a href="#overview" aria-current="location">Overview</a>
+      <a href="#git-panel">GitHub</a>
       <a href="#contract">Team decisions</a>
       <a href="#file-panel">Recent edits</a>
-      <a href="#git-panel">GitHub</a>
     </nav>
   </div>
 </aside>
 <main class="page" id="overview">
   <header>
     <div><p class="eyebrow">Team room</p><h1 id="room"></h1></div>
-    <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
+    <div class="header-actions">
+      <span class="live" id="live"><span class="dot"></span><span id="live-text">Connecting</span></span>
+      <button type="button" class="control" id="copy-room">Copy room link</button>
+      <span id="room-copy-status" class="copy-feedback" role="status"></span>
+    </div>
   </header>
+
+  <section class="workspace" aria-labelledby="workspace-title">
+    <div>
+      <h2 id="workspace-title">Project workspace</h2>
+      <p id="workspace-summary">Connect your project to share decisions, file activity, and code with your team.</p>
+    </div>
+    <div class="workspace-actions">
+      <button type="button" class="control primary" data-guide="setup" id="setup-guide">Connect your project</button>
+      <button type="button" class="control" data-guide="publish" id="publish-guide" hidden>Share changes</button>
+      <button type="button" class="control" data-guide="sync" id="sync-guide" hidden>Sync updates</button>
+    </div>
+  </section>
 
   <dl class="metrics">
     <div class="metric"><dt>Active teammates</dt><dd id="active-total">—</dd></div>
-    <div class="metric"><dt>Saved decisions</dt><dd id="decisions-total">—</dd></div>
     <div class="metric"><dt>Open conflicts</dt><dd id="conflicts-total">—</dd></div>
     <div class="metric"><dt>Open requests</dt><dd id="requests-total">—</dd></div>
     <div class="metric"><dt>Files with overlap</dt><dd id="overlap-total">—</dd></div>
@@ -313,18 +378,19 @@
       <h2>Decision requests <span class="count" id="request-count"></span></h2>
       <div id="request-list"></div>
     </section>
+    <section id="git-panel" class="panel">
+      <h2>GitHub</h2>
+      <p id="git-repository" class="meta"></p>
+      <div class="repo-actions" id="repo-actions"></div>
+      <ul id="git-activity"></ul>
+    </section>
     <section class="panel" id="contract">
-      <h2>Team decisions</h2>
+      <h2>Team decisions <span class="count" id="decisions-total"></span></h2>
       <ul id="decisions"></ul>
       <details class="retired" id="retired" hidden>
         <summary id="retired-summary"></summary>
         <ul id="retired-list"></ul>
       </details>
-    </section>
-    <section id="git-panel" class="panel">
-      <h2>GitHub activity</h2>
-      <p id="git-repository" class="meta"></p>
-      <ul id="git-activity"></ul>
     </section>
    </div>
    <div class="column">
@@ -352,6 +418,16 @@
   </footer>
 </main>
 </div>
+
+<dialog id="terminal-dialog" aria-labelledby="terminal-title">
+  <h2 id="terminal-title"></h2>
+  <p class="meta" id="terminal-intro"></p>
+  <ol id="terminal-steps" class="terminal-steps"></ol>
+  <div class="terminal-footer">
+    <span id="command-copy-status" class="copy-feedback" role="status"></span>
+    <form method="dialog"><button type="submit" class="control">Close</button></form>
+  </div>
+</dialog>
 
 <dialog id="answer-dialog" aria-labelledby="answer-question">
   <form id="answer-form">
@@ -390,6 +466,8 @@
 
   const $ = (id) => document.getElementById(id);
   $("room").textContent = room;
+  const cli = "python3 coord/git_sync.py";
+  let roomRepository = null;
 
   let lastSignature = null;   // what the lists looked like at the last redraw
   let seen = null;            // items already shown; null until the first load
@@ -404,6 +482,104 @@
     if (className) node.className = className;
     if (text != null) node.textContent = text;
     return node;
+  }
+
+  async function copyText(text, feedback, fallback) {
+    try {
+      await navigator.clipboard.writeText(text);
+      feedback.textContent = "Copied.";
+    } catch {
+      feedback.textContent = fallback;
+    }
+  }
+
+  $("copy-room").addEventListener("click", () => {
+    const url = new URL("/", location.origin);
+    url.searchParams.set("room", room);
+    copyText(url.href, $("room-copy-status"), "Copy the room link from your address bar.");
+  });
+
+  function selectNavigation() {
+    for (const link of document.querySelectorAll("nav a")) {
+      if (link.hash === (location.hash || "#overview")) link.setAttribute("aria-current", "location");
+      else link.removeAttribute("aria-current");
+    }
+  }
+  window.addEventListener("hashchange", selectNavigation);
+  selectNavigation();
+
+  function openGuide(kind) {
+    // Quote room values for the macOS/Linux shell, including embedded quotes.
+    const quote = (value) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+    const guides = {
+      setup: {
+        title: "Connect your project",
+        intro: "Use Terminal on your Mac or Linux computer. The setup asks for your display name.",
+        steps: [
+          ["Get the installer", "Download or clone Team Contract, then open Terminal in the downloaded folder.", null,
+           ["Open Team Contract on GitHub", "https://github.com/Alishnis/multi-vibecode"]],
+          ["Join this room", 'Replace "/path/to/your/project" with your project folder before running this command.',
+           `python3 install.py "/path/to/your/project" --room ${quote(room)} --server ${quote(location.origin)}`],
+          ["Connect your GitHub account", "Run this once if you haven’t signed in to the GitHub CLI.", "gh auth login",
+           ["Get GitHub CLI", "https://cli.github.com/"]],
+        ],
+      },
+      publish: {
+        title: "Share changes for review",
+        intro: "Run these commands in your project folder on your computer.",
+        steps: [
+          ["Start a task", "Replace my-task with a unique name, such as ali/todo-api. This starts from the latest shared code.", `${cli} start my-task`],
+          ["Make and commit your edits", "Select the files you want to share in your editor’s Source Control panel and commit them."],
+          ["Publish for review", "This uploads your commits and opens or updates a pull request. Share the review link printed in Terminal.", `${cli} publish --ready`],
+        ],
+      },
+      sync: {
+        title: "Sync approved updates",
+        intro: "Run these commands in your project folder on your computer.",
+        steps: [
+          ["Check once", "Apply approved, merged changes if you’re on the shared branch and have no local edits.", `${cli} watch --once`],
+          ["Or keep syncing automatically", "Leave this terminal open for approval and merge notices. Press Ctrl+C when you want it to stop.", `${cli} watch`],
+        ],
+      },
+    };
+    if (roomRepository) {
+      guides.setup.steps.unshift(["Get your team’s project", "If you don’t have it on your computer yet, clone the repository from GitHub.",
+        null, ["Open project on GitHub", `https://github.com/${roomRepository.repository}`]]);
+    } else {
+      guides.setup.steps.push(["Link an existing GitHub repo", "In the project folder, the room owner runs this once and enters the team key. Set it at the bottom of the dashboard first.", `${cli} link`]);
+      guides.setup.steps.push(["Or create a private repo", "Use this if your project has a local Git commit and no GitHub remote. Replace OWNER/REPO with your GitHub username and the new repo name.", `${cli} create OWNER/REPO`]);
+    }
+    guides.setup.steps.push(["Open the project in Claude Code", "Start a new session in your project folder and allow the team-contract tool if prompted."]);
+    const guide = guides[kind];
+    $("terminal-title").textContent = guide.title;
+    $("terminal-intro").textContent = guide.intro;
+    $("command-copy-status").textContent = "";
+    const list = $("terminal-steps");
+    list.replaceChildren();
+    for (const [label, description, command, resource] of guide.steps) {
+      const step = el("li");
+      step.append(el("strong", null, label), el("p", "hint", description));
+      if (command) {
+        const box = el("div", "command-box");
+        const copy = el("button", "control", "Copy");
+        copy.type = "button";
+        copy.setAttribute("aria-label", `Copy command for ${label.toLowerCase()}`);
+        copy.addEventListener("click", () => copyText(command, $("command-copy-status"), "Select the command to copy it manually."));
+        box.append(el("code", null, command), copy);
+        step.append(box);
+      }
+      if (resource) {
+        const link = el("a", "hint", resource[0]);
+        link.href = resource[1];
+        step.append(link);
+      }
+      list.append(step);
+    }
+    $("terminal-dialog").showModal();
+  }
+
+  for (const button of document.querySelectorAll("[data-guide]")) {
+    button.addEventListener("click", () => openGuide(button.dataset.guide));
   }
 
   // The name is remembered on this computer. The team key is remembered only
@@ -729,38 +905,64 @@
 
   function setLive(ok) {
     $("live").classList.toggle("down", !ok);
-    $("live-text").textContent = ok ? "live" : "connection lost";
+    $("live-text").textContent = ok ? "Room online" : "Connection lost";
   }
 
   function renderGit(git) {
     const rows = $("git-activity");
+    const actions = $("repo-actions");
     rows.replaceChildren();
-    if (!git?.repository) {
-      $("git-repository").textContent = "No repository linked.";
+    actions.replaceChildren();
+    roomRepository = git?.repository || null;
+    $("publish-guide").hidden = $("sync-guide").hidden = !roomRepository;
+    $("setup-guide").textContent = roomRepository ? "Setup guide" : "Connect your project";
+    $("setup-guide").classList.toggle("primary", !roomRepository);
+    $("publish-guide").classList.toggle("primary", !!roomRepository);
+    if (!roomRepository) {
+      $("workspace-summary").textContent = "Connect your project to share decisions, file activity, and code with your team.";
+      $("git-repository").textContent = "This room has no GitHub repository yet.";
       return;
     }
-    const {repository, base_branch} = git.repository;
+    const {repository, base_branch} = roomRepository;
     const url = `https://github.com/${repository}`;
+    $("workspace-summary").textContent = `Share work for review and keep your local copy of ${base_branch} up to date.`;
     const link = el("a", null, repository);
     link.href = url;
-    $("git-repository").replaceChildren(link, document.createTextNode(` · Base branch: ${base_branch}`));
+    $("git-repository").replaceChildren(link, document.createTextNode(` · Shared branch: ${base_branch}`));
+    const pulls = el("a", "control", "Open pull requests");
+    pulls.href = `${url}/pulls`;
+    actions.append(pulls);
+    const statuses = {
+      draft: "Draft",
+      in_review: "Ready for review",
+      approved: "Approved",
+      changes_requested: "Changes requested",
+    };
     for (const activity of git.activity) {
       const row = el("li", "git-row");
-      row.append(el("strong", null, activity.author), document.createTextNode(` · ${activity.branch}`));
+      const heading = el("div");
+      heading.append(el("strong", null, activity.author), document.createTextNode(` · ${activity.branch}`));
+      const statusLabel = statuses[activity.pr_state];
+      if (typeof statusLabel === "string") heading.append(el("span", `git-pill ${activity.pr_state}`, statusLabel));
+      row.append(heading);
       if (activity.pr_number) {
-        const pr = el("a", null, `PR #${activity.pr_number}`);
+        const links = el("div", "git-links");
+        const pr = el("a", null, `Pull request #${activity.pr_number}`);
         pr.href = `${url}/pull/${activity.pr_number}`;
-        row.append(pr);
+        const review = el("a", null, "View changed files");
+        review.href = `${pr.href}/files`;
+        links.append(pr, review);
+        row.append(links);
       }
       const status = activity.behind
-        ? `${activity.ahead} ahead · ${activity.behind} behind ${base_branch}`
-        : `${activity.ahead} ahead · Up to date with ${base_branch}`;
-      const meta = el("div", "meta", `${status} · Checked `);
+        ? `${activity.behind} commits behind ${base_branch}`
+        : `Includes the latest reported ${base_branch}`;
+      const meta = el("div", "meta", `${activity.ahead} branch commits · ${status} · Reported `);
       meta.append(timeSpan(activity.checked_at));
       row.append(meta);
       rows.append(row);
     }
-    if (!git.activity.length) rows.append(el("li", "meta", "No branch reports yet."));
+    if (!git.activity.length) rows.append(el("li", "empty", "Published work will appear here when a teammate shares it."));
   }
 
   function renderFiles(files) {
@@ -809,13 +1011,17 @@
 
     // Redraw the lists only when something was added or removed, so the
     // highlight on a new item is not interrupted by the next refresh.
-    const signature = JSON.stringify([state.decisions, state.retired_decisions, state.conflicts, state.decision_requests, state.git, state.files, approvalEnabled]);
+    const signature = JSON.stringify([state.decisions, state.retired_decisions, state.conflicts, state.decision_requests, state.files, approvalEnabled]);
     if (signature !== lastSignature) {
       lastSignature = signature;
       renderLists(state);
       renderRequests(state);
-      renderGit(state.git);
       renderFiles(state.files);
+    }
+    const gitSignature = JSON.stringify(state.git ?? null);
+    if ($("git-panel").dataset.signature !== gitSignature) {
+      renderGit(state.git);
+      $("git-panel").dataset.signature = gitSignature;
     }
     renderPeople(state.people || []);
     $("active-total").textContent = (state.people || []).filter((person) => person.seconds_ago < ACTIVE_SECONDS).length;

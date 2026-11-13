@@ -83,14 +83,14 @@ On its next prompt, each teammate's agent receives a short list of what was adde
 
 ## Share code through GitHub
 
-Run the updated installer at the root of each teammate's clone. The optional Git commands need Git and the GitHub CLI (`gh auth login`). Give each teammate access on GitHub.
+Run the updated installer for each teammate's clone. The room dashboard has copyable commands under **Connect your project**, **Share changes**, and **Sync updates**. Run them in Terminal on your computer. The Git commands need Git and the GitHub CLI (`gh auth login`). Give each teammate access on GitHub.
 
 1. **Link the room once.** From an installed project with an existing GitHub `origin`, run `python3 coord/git_sync.py link` and enter the room's team key. The command reads GitHub's default branch. For a new project with an initial local commit and no `origin`, run `python3 coord/git_sync.py create OWNER/REPO` to create a private GitHub repo, push the current branch's committed history, and link the room. Review that history before running the command. Teammates clone the repo and use the same room code and server URL.
-2. **Work on a task branch.** For example, run `git switch -c ali/todo-api`. Stage the files you want to share and commit them yourself.
-3. **Push and open a draft PR.** Run `python3 coord/git_sync.py publish --title "Add todo API"`. The command pushes your existing commits and opens a draft PR. Run it again after later commits to push to the same branch and reuse the open PR.
-4. **Check for new base-branch commits.** Run `python3 coord/git_sync.py status` to fetch the base branch and report your current branch, open PR, and ahead/behind counts in the dashboard. The timestamp shows when each teammate last checked. After a human reviews and merges a PR, teammates update their own checkouts when ready.
+2. **Start a task.** Run `python3 coord/git_sync.py start ali/todo-api` to create a branch from the latest shared code. Make your edits and commit the files you want to share using your editor’s Source Control panel or Git.
+3. **Share it for review.** Run `python3 coord/git_sync.py publish --ready`. This pushes your commits, opens or updates one pull request, and prints the review link. Add `--title "Add todo API"` to name a new pull request. Use `publish` on its own to open a new pull request as a draft.
+4. **Review and merge.** From the dashboard, a teammate can select **View changed files** to review on GitHub. Someone with permission merges it on GitHub after approval. The dashboard shows the branch and review status last reported by `publish` or `python3 coord/git_sync.py status`.
 
-The dashboard gets repository and branch metadata only. GitHub handles the source code, credentials, and PRs. The publish command is the push entry point for automatic draft creation. Plain `git push` still behaves normally.
+The dashboard gets repository, branch, and review metadata. GitHub handles the source code, credentials, and reviews. Use `publish` to open or update the pull request while pushing your commits.
 
 ### Get approval notices and sync after merge
 
@@ -104,7 +104,7 @@ Each running watcher checks GitHub about every 30 seconds. It prints a notice wh
 
 Before testing automatic updates, run `git status --short` in the receiving clone. The installer can add shared project files that show up as local changes. Commit those shared setup files to the repository first, then use a clone that already has that commit. Leave `coord/me.json` and `.claude/settings.local.json` local and ignored.
 
-Use `watch --notify-only` to get the same terminal notices without applying changes. Press Ctrl+C to stop. The command is opt-in on every laptop and runs while the terminal stays open. It uses your existing GitHub CLI login. Approve from a different GitHub account than the PR author when testing with two clones. GitHub controls review requirements and whether a new commit dismisses approval. The watcher checks the latest 50 PRs per state and only applies a fetched commit it can match to an approved, merged PR.
+Use `python3 coord/git_sync.py watch --once` for a single check and sync, or add `--notify-only` to see notices without applying changes. Press Ctrl+C to stop continuous watching. The command is opt-in on every laptop and uses your existing GitHub CLI login. Approve from a different GitHub account than the PR author when testing with two clones. GitHub controls review requirements and whether a new commit dismisses approval. The watcher checks the latest 50 PRs per state and applies a fetched commit it can match to an approved, merged PR.
 
 ## Get file overlap warnings
 

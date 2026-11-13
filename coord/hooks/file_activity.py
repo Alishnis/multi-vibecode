@@ -58,7 +58,7 @@ def message(path: str, edits: list[dict]) -> str:
         descriptions.append(f"{author} ({f'{minutes} min ago' if minutes else 'just now'})")
     return (
         f"[Team Contract · FILE OVERLAP] {', '.join(descriptions)} recently edited {label(path)}. "
-        "Check with the team or review their changes before proceeding."
+        "Before you edit, review their changes or ask your teammate if you should wait."
     )
 
 
