@@ -29,11 +29,12 @@ from pathlib import Path
 SOURCE = Path(__file__).resolve().parent
 FILES_TO_COPY = [
     "coord/hooks/contract_hook.py",
+    "coord/hooks/file_activity.py",
     "coord/mcp/server.py",
     "coord/git_sync.py",
     "coord/me.example.json",
 ]
-HOOK_MARKER = "coord/hooks/contract_hook.py"  # how we recognise our own hook
+HOOK_SCRIPTS = ("coord/hooks/contract_hook.py", "coord/hooks/file_activity.py")
 TOOL_NAME = "team-contract"
 IGNORE_LINES = ["coord/me.json", ".claude/settings.local.json"]
 
@@ -69,26 +70,31 @@ def copy_files(target: Path) -> None:
 
 
 def add_hook(target: Path) -> None:
-    """Merge our UserPromptSubmit hook into the project's Claude Code settings."""
-    our_groups = [
-        group
-        for group in read_json(SOURCE / ".claude/settings.json")["hooks"]["UserPromptSubmit"]
-        if any(HOOK_MARKER in hook.get("command", "") for hook in group.get("hooks", []))
-    ]
+    """Install missing Team Contract hooks without replacing other hooks."""
+    source_hooks = read_json(SOURCE / ".claude/settings.json")["hooks"]
     path = target / ".claude/settings.json"
     settings = read_json(path)
-    groups = settings.setdefault("hooks", {}).setdefault("UserPromptSubmit", [])
-    already = any(
-        HOOK_MARKER in hook.get("command", "")
-        for group in groups
-        for hook in group.get("hooks", [])
-    )
-    if already:
-        print("  hook already in .claude/settings.json")
-        return
-    groups.extend(our_groups)
-    write_json(path, settings)
-    print("  added the hook to .claude/settings.json")
+    changed = False
+    for event, source_groups in source_hooks.items():
+        groups = settings.setdefault("hooks", {}).setdefault(event, [])
+        for group in source_groups:
+            hooks = [hook for hook in group["hooks"] if any(
+                script in hook.get("command", "") for script in HOOK_SCRIPTS
+            )]
+            if not hooks:
+                continue
+            existing = [hook for current in groups for hook in current.get("hooks", [])]
+            missing = [hook for hook in hooks if not any(
+                current.get("command") == hook["command"] for current in existing
+            )]
+            if missing:
+                groups.append({**group, "hooks": missing})
+                changed = True
+    if changed:
+        write_json(path, settings)
+        print("  added Team Contract hooks to .claude/settings.json")
+    else:
+        print("  Team Contract hooks already installed")
 
 
 def add_tool(target: Path) -> None:

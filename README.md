@@ -69,3 +69,11 @@ Run the updated installer at the root of each teammate's clone. The optional Git
 4. **Check for new base-branch commits.** Run `python3 coord/git_sync.py status` to fetch the base branch and report your current branch, open PR, and ahead/behind counts in the dashboard. The timestamp shows when each teammate last checked. After a human reviews and merges a PR, teammates update their own checkouts when ready.
 
 The dashboard gets repository and branch metadata only. GitHub handles the source code, credentials, and PRs. The publish command is the push entry point for automatic draft creation. Plain `git push` still behaves normally. The CLI has no pull, merge, force-push, or automatic commit step.
+
+## Get file overlap warnings
+
+Rerun the installer and restart Claude Code in each teammate's project. Use the same room with distinct names. In a linked room, both checkouts must point to the room's GitHub repository.
+
+When Claude Code successfully edits a file using Edit, Write, MultiEdit, or NotebookEdit, Team Contract reports the project-relative path, teammate name, branch if available, and time. When a different teammate's agent is about to edit the same path within 30 minutes, Claude Code shows a **FILE OVERLAP** warning in the terminal and passes the warning to the agent. The warning is advisory. You can review the teammate's work before proceeding. The dashboard shows the recent reports and marks paths reported by multiple teammates.
+
+To try it, have Claude Code in the first checkout write a test file such as `src/todos.py`. Then ask Claude Code in the second checkout to edit or write the same relative path. Watch for the terminal warning before the second change and verify both reports in **Recent file edits**. Shell commands and edits made outside these Claude Code tools are outside this check. Only file metadata is sent to the server.

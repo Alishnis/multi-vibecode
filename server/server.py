@@ -11,8 +11,8 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime, timedelta, timezone
+from pathlib import Path, PurePosixPath
 from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException
@@ -26,6 +26,7 @@ DASHBOARD_PATH = Path(__file__).parent / "dashboard.html"
 log = logging.getLogger("uvicorn.error")
 
 Category = Literal["stack", "api", "data", "convention", "other"]
+FILE_ACTIVITY_MINUTES = 30
 
 
 def load_env_file() -> None:
@@ -129,6 +130,15 @@ def create_tables() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS file_edits (
+                room TEXT NOT NULL, path TEXT NOT NULL, author TEXT NOT NULL,
+                branch TEXT, edited_at TEXT NOT NULL, PRIMARY KEY (room, path, author)
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS file_edits_recent ON file_edits(room, edited_at)")
 
 
 def now() -> str:
@@ -256,6 +266,32 @@ class GitActivity(RoomAuthor):
     ahead: int = Field(ge=0)
     behind: int = Field(ge=0)
     pr_number: int | None = Field(default=None, gt=0)
+
+
+class FileActivity(RoomAuthor):
+    path: str = Field(min_length=1, max_length=500)
+    repository: str | None = Field(default=None, max_length=141)
+    branch: str | None = Field(default=None, min_length=1, max_length=250)
+
+    @field_validator("path")
+    @classmethod
+    def relative_path(cls, value: str) -> str:
+        path = PurePosixPath(value)
+        if (path.is_absolute() or path.as_posix() != value or
+                any(part in {".", "..", ".git"} for part in value.split("/")) or
+                "\\" in value or ":" in value or not value.isprintable()):
+            raise ValueError("Use a clean, project-relative file path")
+        return value
+
+
+def recent_file_cutoff() -> str:
+    return (datetime.now(timezone.utc) - timedelta(minutes=FILE_ACTIVITY_MINUTES)).isoformat(timespec="seconds")
+
+
+def require_linked_checkout(conn: sqlite3.Connection, activity: FileActivity) -> None:
+    linked = room_repository(conn, activity.room)
+    if linked and (activity.repository or "").lower() != linked["repository"]:
+        raise HTTPException(409, "This checkout does not match the room's GitHub repository.")
 
 
 def room_repository(conn: sqlite3.Connection, room: str) -> dict | None:
@@ -480,6 +516,11 @@ def get_state(room: str) -> dict:
             "SELECT author, branch, ahead, behind, pr_number, checked_at "
             "FROM git_activity WHERE room = ? ORDER BY author", (room,),
         )]
+        file_edits = [dict(row) for row in conn.execute(
+            "SELECT path, author, branch, edited_at FROM file_edits "
+            "WHERE room = ? AND edited_at >= ? ORDER BY edited_at DESC, path, author LIMIT 100",
+            (room, recent_file_cutoff()),
+        )]
     return {
         "room": room,
         "decisions": decisions,
@@ -488,6 +529,7 @@ def get_state(room: str) -> dict:
         "approval_enabled": bool(os.environ.get("CONTRACT_APPROVAL_TOKEN")),
         "people": load_people(room),
         "git": {"repository": repository, "activity": git_activity},
+        "files": {"edits": file_edits, "window_minutes": FILE_ACTIVITY_MINUTES},
         "checker": "on" if conflicts.is_configured() else "off",
         "now": now(),  # the page shows "2 min ago" against the server's clock
     }
@@ -512,13 +554,16 @@ def link_repository(link: RoomRepository, x_contract_token: str | None = Header(
     if repository["repository"].split("/")[1] in {".", ".."}:
         raise HTTPException(422, "Invalid repository name.")
     with connect() as conn:
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO room_repositories (room, repository, base_branch) VALUES (?, ?, ?) "
             "ON CONFLICT (room) DO NOTHING",
             (link.room, repository["repository"], link.base_branch),
         )
         if room_repository(conn, link.room) != repository:
             raise HTTPException(409, "This room already has a different repository or base branch.")
+        if cursor.rowcount:
+            # Earlier activity may belong to a different project before the room was linked.
+            conn.execute("DELETE FROM file_edits WHERE room = ?", (link.room,))
     return {"repository": repository}
 
 
@@ -549,9 +594,41 @@ def reset_room(room: str, x_contract_token: str | None = Header(None)) -> dict:
     if os.environ.get("CONTRACT_APPROVAL_TOKEN"):
         require_approval_token(x_contract_token)
     with connect() as conn:
-        for table in ("decisions", "conflicts", "people", "decision_requests", "git_activity"):
+        for table in ("decisions", "conflicts", "people", "decision_requests", "git_activity", "file_edits"):
             conn.execute(f"DELETE FROM {table} WHERE room = ?", (room,))
     return {"room": room, "reset": True}
+
+
+@app.post("/files/check")
+def check_file(activity: FileActivity) -> dict:
+    with connect() as conn:
+        conn.execute("BEGIN")
+        require_linked_checkout(conn, activity)
+        edits = [dict(row) for row in conn.execute(
+            "SELECT author, branch, edited_at FROM file_edits "
+            "WHERE room = ? AND path = ? AND author <> ? AND edited_at >= ? "
+            "ORDER BY edited_at DESC, author LIMIT 5",
+            (activity.room, activity.path, activity.author, recent_file_cutoff()),
+        )]
+    return {"edits": edits}
+
+
+@app.post("/files/edits")
+def record_file_edit(activity: FileActivity) -> dict:
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        require_linked_checkout(conn, activity)
+        conn.execute(
+            "DELETE FROM file_edits WHERE room = ? AND edited_at < ?",
+            (activity.room, recent_file_cutoff()),
+        )
+        conn.execute(
+            "INSERT INTO file_edits (room, path, author, branch, edited_at) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT (room, path, author) DO UPDATE SET "
+            "branch = excluded.branch, edited_at = excluded.edited_at",
+            (activity.room, activity.path, activity.author, activity.branch, now()),
+        )
+    return {"ok": True}
 
 
 @app.get("/health", include_in_schema=False)

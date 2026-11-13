@@ -60,8 +60,6 @@
     padding-bottom: 20px; border-bottom: 1px solid var(--line); margin-bottom: 24px;
   }
   h1 { font-size: 1.7rem; margin: 0; letter-spacing: -0.01em; }
-  .room { color: var(--muted); font-size: 1rem; }
-  .room b { color: var(--text); font-weight: 600; }
   .people { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
   .person {
     display: inline-flex; align-items: center; gap: 8px;
@@ -181,48 +179,156 @@
     .decision { grid-template-columns: 1fr; gap: 6px; }
     .tag { justify-self: start; padding: 3px 10px; }
   }
+
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f6fa; --panel: #fff; --text: #182137; --muted: #55627a;
+    --line: #dce3ef; --accent: #4842be; --ok: #18764d; --rail: #171b32;
+    --rail-text: #eff0ff; --rail-muted: #b9c0dd; --chip: #eeedfd;
+    --amber: #935a09; --amber-bg: #fff4df; --danger-bg: #fff4f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101322; --panel: #191e31; --text: #f1f2ff; --muted: #aeb8d3;
+      --line: #313a54; --accent: #b8b1ff; --ok: #6ed8a9; --rail: #15192b;
+      --rail-text: #eff0ff; --rail-muted: #b9c0dd; --chip: #2d2a4c;
+      --amber: #ffcf7d; --amber-bg: #3c2c20; --danger-bg: #32202b;
+    }
+  }
+  html { font-size: 16px; scroll-padding-top: 16px; }
+  body { font-family: Inter, system-ui, -apple-system, sans-serif; }
+  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 3px;
+  }
+  .app-shell { display: grid; grid-template-columns: 218px minmax(0, 1fr); min-height: 100vh; }
+  .rail { background: var(--rail); color: var(--rail-text); padding: 30px 20px; }
+  .rail-inner { position: sticky; top: 30px; }
+  .brand { display: flex; gap: 10px; align-items: center; font-weight: 750; font-size: 1rem; }
+  .mark {
+    display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
+    background: #a79bff; color: #201946; font: 750 .8rem ui-monospace, monospace;
+  }
+  nav { display: grid; gap: 4px; margin-top: 35px; }
+  nav a { text-decoration: none; color: var(--rail-muted); padding: 10px 12px; border-radius: 8px; font-size: .88rem; }
+  nav a:hover, nav a:focus-visible { background: #303653; color: white; }
+  .page { width: 100%; max-width: 1380px; padding: 34px clamp(22px, 4vw, 56px) 32px; }
+  header { margin-bottom: 24px; padding: 0; border: 0; align-items: flex-start; justify-content: space-between; }
+  h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 760; line-height: 1.15; letter-spacing: -.05em; overflow-wrap: anywhere; }
+  .eyebrow { font-size: .73rem; font-weight: 750; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 8px; }
+  .live { padding: 6px 11px; border-radius: 20px; border: 1px solid var(--line); background: var(--panel); }
+  .live .dot { width: 7px; height: 7px; animation: none; }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
+  .metric { margin: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 12px 15px; min-width: 0; }
+  .metric dt { color: var(--muted); font-size: .78rem; }
+  .metric dd { margin: 4px 0 0; font-size: 1.45rem; font-weight: 750; }
+  .grid { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; }
+  .column { display: grid; min-width: 0; gap: 16px; }
+  .panel { padding: 18px 19px; min-width: 0; overflow-wrap: anywhere; }
+  .panel > h2 { font-size: .95rem; letter-spacing: -.01em; text-transform: none; color: var(--text); margin-bottom: 10px; }
+  #requests, #conflicts, #git-panel { margin: 0; }
+  .people { margin: 0; }
+  .person { border-radius: 7px; padding: 5px 9px; font-size: .85rem; }
+  .conflict { border-width: 1px 1px 1px 4px; padding: 12px; margin-bottom: 10px; }
+  .conflict:last-child { margin-bottom: 0; }
+  .conflict .badge { background: transparent; color: var(--danger); padding: 0; font-size: .72rem; }
+  .conflict .why { font-size: 1rem; }
+  .sides { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .side { padding: 9px; }
+  .side .what, .decision .what { font-size: .98rem; }
+  .decision { grid-template-columns: 95px minmax(0, 1fr); padding: 10px 0; }
+  .event { padding: 9px 0; font-size: .88rem; }
+  .empty { padding: 10px 0; font-size: .9rem; }
+  .file-row { padding: 9px 0; border-top: 1px solid var(--line); }
+  .file-row code { font-size: .86rem; }
+  .file-overlap { color: var(--amber); background: var(--amber-bg); border-radius: 5px; padding: 2px 6px; margin-left: 6px; font-size: .7rem; font-weight: 700; white-space: nowrap; }
+  .answer-primary { background: var(--chip); }
+  @media (max-width: 960px) {
+    .app-shell { grid-template-columns: 164px minmax(0, 1fr); }
+    .rail { padding: 23px 13px; }
+    .grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 620px) {
+    .app-shell { display: block; }
+    .rail { padding: 12px 15px; }
+    nav { display: flex; flex-wrap: wrap; margin-top: 10px; }
+    nav a { padding: 5px 8px; }
+    .page { padding: 23px 14px; }
+    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sides { grid-template-columns: minmax(0, 1fr); }
+    .decision { grid-template-columns: minmax(0, 1fr); }
+    .column { display: contents; }
+    #file-panel { grid-row: 1; }
+  }
 </style>
 </head>
 <body>
-<div class="page">
+<div class="app-shell">
+<aside class="rail">
+  <div class="rail-inner">
+    <div class="brand"><span class="mark" aria-hidden="true">TC</span> Team Contract</div>
+    <nav aria-label="Room navigation">
+      <a href="#overview">Overview</a>
+      <a href="#contract">Team decisions</a>
+      <a href="#file-panel">Recent edits</a>
+      <a href="#git-panel">GitHub</a>
+    </nav>
+  </div>
+</aside>
+<main class="page" id="overview">
   <header>
-    <h1>Team contract</h1>
-    <span class="room">room <b id="room"></b></span>
+    <div><p class="eyebrow">Team room</p><h1 id="room"></h1></div>
     <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
-    <div class="people" id="people"></div>
   </header>
 
-  <section id="requests" class="panel" hidden>
-    <h2>Decision requests <span class="count" id="request-count"></span></h2>
-    <div id="request-list"></div>
-  </section>
-
-  <section id="conflicts" hidden>
-    <h2>Conflicts <span class="count" id="conflict-count"></span></h2>
-    <div id="conflict-list"></div>
-  </section>
-
-  <section id="git-panel" class="panel" hidden>
-    <h2>GitHub activity</h2>
-    <p id="git-repository"></p>
-    <ul id="git-activity"></ul>
-  </section>
+  <dl class="metrics">
+    <div class="metric"><dt>Active teammates</dt><dd id="active-total">—</dd></div>
+    <div class="metric"><dt>Saved decisions</dt><dd id="decisions-total">—</dd></div>
+    <div class="metric"><dt>Open requests</dt><dd id="requests-total">—</dd></div>
+    <div class="metric"><dt>Files with overlap</dt><dd id="overlap-total">—</dd></div>
+  </dl>
 
   <div class="grid">
-    <section class="panel">
-      <h2>Decisions the team has made <span class="count" id="decision-count"></span></h2>
+   <div class="column">
+    <section id="conflicts" class="panel" hidden>
+      <h2>Decision conflicts <span class="count" id="conflict-count"></span></h2>
+      <div id="conflict-list"></div>
+    </section>
+    <section id="requests" class="panel" hidden>
+      <h2>Decision requests <span class="count" id="request-count"></span></h2>
+      <div id="request-list"></div>
+    </section>
+    <section class="panel" id="contract">
+      <h2>Team decisions</h2>
       <ul id="decisions"></ul>
     </section>
+    <section id="git-panel" class="panel">
+      <h2>GitHub activity</h2>
+      <p id="git-repository" class="meta"></p>
+      <ul id="git-activity"></ul>
+    </section>
+   </div>
+   <div class="column">
+    <section class="panel" id="file-panel">
+      <h2>Recent file edits</h2>
+      <p class="meta" id="file-window"></p>
+      <ul id="file-edits"></ul>
+    </section>
     <section class="panel">
-      <h2>Activity</h2>
+      <h2>Teammates</h2>
+      <div class="people" id="people"></div>
+    </section>
+    <section class="panel">
+      <h2>Decision activity</h2>
       <ul id="activity"></ul>
     </section>
+   </div>
   </div>
 
   <footer>
     <span id="checker"></span>
     <button id="reset" type="button">Reset room</button>
   </footer>
+</main>
 </div>
 
 <dialog id="answer-dialog" aria-labelledby="answer-question">
@@ -234,7 +340,7 @@
     <label>Approval token<input id="answer-token" type="password" required autocomplete="off"></label>
     <p id="answer-error" class="form-error" role="alert" hidden></p>
     <div class="dialog-actions">
-      <button class="action" id="answer-submit">Approve decision</button>
+      <button class="action answer-primary" id="answer-submit">Approve decision</button>
       <button class="action" id="answer-cancel" type="button">Cancel</button>
     </div>
   </form>
@@ -288,6 +394,7 @@
   function renderPeople(people) {
     const box = $("people");
     box.replaceChildren();
+    if (!people.length) box.append(el("p", "empty", "No teammates have connected yet."));
     for (const person of people) {
       const active = person.seconds_ago < ACTIVE_SECONDS;
       const chip = el("span", "person" + (active ? " active" : ""));
@@ -343,7 +450,7 @@
     if (state.decisions.length === 0) {
       decisions.append(el("li", "empty", "No decisions yet. The first decision an AI makes will appear here."));
     }
-    $("decision-count").textContent = state.decisions.length || "";
+    $("decisions-total").textContent = state.decisions.length;
 
     // Activity: decisions and conflicts together, newest first
     const events = [
@@ -370,7 +477,9 @@
     const requests = state.decision_requests || [];
     const answers = new Map(state.decisions.map((d) => [d.id, d]));
     $("requests").hidden = !requests.length;
-    $("request-count").textContent = `${requests.filter((r) => r.decision_id === null).length} open`;
+    const openCount = requests.filter((r) => r.decision_id === null).length;
+    $("request-count").textContent = `${openCount} open`;
+    $("requests-total").textContent = openCount;
     const list = $("request-list");
     list.replaceChildren();
     for (const request of [...requests].sort((a, b) => Number(a.decision_id !== null) - Number(b.decision_id !== null))) {
@@ -452,15 +561,17 @@
   }
 
   function renderGit(git) {
-    $("git-panel").hidden = !git?.repository;
-    if (!git?.repository) return;
+    const rows = $("git-activity");
+    rows.replaceChildren();
+    if (!git?.repository) {
+      $("git-repository").textContent = "No repository linked.";
+      return;
+    }
     const {repository, base_branch} = git.repository;
     const url = `https://github.com/${repository}`;
     const link = el("a", null, repository);
     link.href = url;
     $("git-repository").replaceChildren(link, document.createTextNode(` · Base branch: ${base_branch}`));
-    const rows = $("git-activity");
-    rows.replaceChildren();
     for (const activity of git.activity) {
       const row = el("li", "git-row");
       row.append(el("strong", null, activity.author), document.createTextNode(` · ${activity.branch}`));
@@ -478,6 +589,33 @@
       rows.append(row);
     }
     if (!git.activity.length) rows.append(el("li", "meta", "No branch reports yet."));
+  }
+
+  function renderFiles(files) {
+    const list = $("file-edits");
+    list.replaceChildren();
+    const editsByPath = new Map();
+    for (const edit of files?.edits || []) {
+      if (!editsByPath.has(edit.path)) editsByPath.set(edit.path, []);
+      editsByPath.get(edit.path).push(edit);
+    }
+    $("file-window").textContent = files ? `Last ${files.window_minutes} minutes` : "";
+    const groups = [...editsByPath];
+    $("overlap-total").textContent = groups.filter(([, edits]) => edits.length > 1).length;
+    groups.sort((a, b) => Number(b[1].length > 1) - Number(a[1].length > 1));
+    for (const [path, edits] of groups) {
+      const row = el("li", "file-row");
+      row.append(el("code", null, path));
+      if (edits.length > 1) row.append(el("span", "file-overlap", "Overlap"));
+      for (const edit of edits) {
+        const author = edit.branch ? `${edit.author} · ${edit.branch}` : edit.author;
+        const meta = el("div", "meta", `${author} · `);
+        meta.append(timeSpan(edit.edited_at));
+        row.append(meta);
+      }
+      list.append(row);
+    }
+    if (!groups.length) list.append(el("li", "empty", "No recent edits reported."));
   }
 
   async function tick() {
@@ -499,14 +637,16 @@
 
     // Redraw the lists only when something was added or removed, so the
     // highlight on a new item is not interrupted by the next refresh.
-    const signature = JSON.stringify([state.decisions, state.conflicts, state.decision_requests, state.git, approvalEnabled]);
+    const signature = JSON.stringify([state.decisions, state.conflicts, state.decision_requests, state.git, state.files, approvalEnabled]);
     if (signature !== lastSignature) {
       lastSignature = signature;
       renderLists(state);
       renderRequests(state);
       renderGit(state.git);
+      renderFiles(state.files);
     }
     renderPeople(state.people || []);
+    $("active-total").textContent = (state.people || []).filter((person) => person.seconds_ago < ACTIVE_SECONDS).length;
     updateTimes(state.now);
 
     const checker = $("checker");
