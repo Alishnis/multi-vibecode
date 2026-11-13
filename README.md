@@ -115,6 +115,20 @@ These tools run the same `coord/git_sync.py` commands described below, so the te
 
 The dashboard gets repository, branch, and review metadata. GitHub handles the source code, credentials, and reviews. Use `publish` to open or update the pull request while pushing your commits.
 
+### Contract check before sharing
+
+Before `publish` pushes anything (and so before `share_work` does), it sends the changed lines of your commits to the room's server. The server asks the AI checker whether the code breaks a team decision: another framework or database than the one chosen, a different response shape for a decided endpoint, a different field name, a different port, or the opposite of a convention.
+
+- **The code fits.** The push goes ahead and the dashboard shows **Fits the contract** next to the branch.
+- **The code breaks a decision.** Nothing is pushed. The terminal, or Claude, names the file, what the code does, and the decision. Fix the code, or settle the decision with your team on the dashboard.
+- **You want to share it as it is.** Run `python3 coord/git_sync.py publish --anyway`, or tell Claude to share anyway. The dashboard then shows **Breaks a team decision** next to the branch, with the reason.
+- **The check cannot run** (no API key on the server, an empty contract, the server unreachable). The push goes ahead and you are told the code was not checked.
+
+What leaves your computer: up to 12,000 characters of the change, without Team Contract's own setup files. The server passes it to the checker and stores only the findings. To send nothing, add `"check_code": false` to `coord/me.json`, or run `publish --no-check`.
+
+The checker is tested with `.venv/bin/python -m server.test_share_live`, which needs the OpenRouter key.
+
+
 ### Get approval notices and sync after merge
 
 In each linked clone, rerun the installer and start this in a separate terminal:
@@ -135,6 +149,8 @@ By default the watcher applies only pull requests that someone approved. Many sm
 
 Rerun the installer and restart Claude Code in each teammate's project. Use the same room with distinct names. In a linked room, both checkouts must point to the room's GitHub repository.
 
-When Claude Code successfully edits a file using Edit, Write, MultiEdit, or NotebookEdit, Team Contract reports the project-relative path, teammate name, branch if available, and time. When a different teammate's agent is about to edit the same path within 30 minutes, Claude Code shows a **FILE OVERLAP** warning in the terminal and passes the warning to the agent. The warning is advisory. You can review the teammate's work before proceeding. The dashboard shows the recent reports and marks paths reported by multiple teammates.
+When Claude Code successfully edits a file using Edit, Write, MultiEdit, or NotebookEdit, Team Contract reports the project-relative path, teammate name, branch if available, and time. When a different teammate's agent is about to edit the same path within 30 minutes, Claude Code pauses before the edit, shows a **FILE OVERLAP** notice with who edited the file and when, and asks you to allow or deny it. After you allow it once, further edits to that file go through until a teammate changes it again. The dashboard shows the recent reports and marks paths reported by multiple teammates.
 
-To try it, have Claude Code in the first checkout write a test file such as `src/todos.py`. Then ask Claude Code in the second checkout to edit or write the same relative path. Watch for the terminal warning before the second change and verify both reports in **Recent file edits**. Shell commands and edits made outside these Claude Code tools are outside this check. Only file metadata is sent to the server.
+To try it, have Claude Code in the first checkout write a test file such as `src/todos.py`. Then ask Claude Code in the second checkout to edit the same relative path, and watch for the question before the second change. Shell commands and edits made outside these Claude Code tools are outside this check. Only file metadata is sent to the server.
+
+To get a note for the agent instead of a question for you, add `"overlap": "note"` to `coord/me.json`. In a session with nobody at the keyboard (`claude -p`), a question cannot be answered, so the edit is refused; use the note setting there.

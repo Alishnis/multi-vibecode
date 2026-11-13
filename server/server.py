@@ -186,6 +186,16 @@ def create_tables() -> None:
         add_column(conn, "conflicts", "resolved_at", "TEXT")
         add_column(conn, "people", "contract_seen_at", "TEXT")
         add_column(conn, "git_activity", "pr_state", "TEXT")
+        # The last contract check of each person's shared code. Only the
+        # findings are kept, never the code itself.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS share_checks (
+                room TEXT NOT NULL, author TEXT NOT NULL, branch TEXT NOT NULL,
+                findings TEXT NOT NULL, checked_at TEXT NOT NULL, PRIMARY KEY (room, author)
+            )
+            """
+        )
 
 
 def add_column(conn: sqlite3.Connection, table: str, column: str, kind: str) -> None:
@@ -412,6 +422,17 @@ class GitActivity(RoomAuthor):
     behind: int = Field(ge=0)
     pr_number: int | None = Field(default=None, gt=0)
     pr_state: Literal["draft", "in_review", "changes_requested", "approved"] | None = None
+
+
+class ShareCheck(RoomAuthor):
+    branch: Line = Field(min_length=1, max_length=250)
+    files: list[str] = Field(max_length=200)
+    diff: str = Field(min_length=1, max_length=20000)
+
+    @field_validator("files")
+    @classmethod
+    def clean_files(cls, files: list[str]) -> list[str]:
+        return [clean_line(name)[:500] for name in files]
 
 
 class FileActivity(RoomAuthor):
@@ -842,6 +863,12 @@ def get_state(room: RoomParam) -> dict:
             "SELECT author, branch, ahead, behind, pr_number, pr_state, checked_at "
             "FROM git_activity WHERE room = ? ORDER BY author", (room,),
         )]
+        share_checks = [
+            {**dict(row), "findings": json.loads(row["findings"])} for row in conn.execute(
+                "SELECT author, branch, findings, checked_at FROM share_checks "
+                "WHERE room = ? ORDER BY author", (room,),
+            )
+        ]
         file_edits = [dict(row) for row in conn.execute(
             "SELECT path, author, branch, edited_at FROM file_edits "
             "WHERE room = ? AND edited_at >= ? ORDER BY edited_at DESC, path, author LIMIT 100",
@@ -858,7 +885,7 @@ def get_state(room: RoomParam) -> dict:
         "approval_enabled": has_key or bool(os.environ.get("CONTRACT_APPROVAL_TOKEN")),
         "room_key": has_key,
         "people": load_people(room),
-        "git": {"repository": repository, "activity": git_activity},
+        "git": {"repository": repository, "activity": git_activity, "checks": share_checks},
         "files": {"edits": file_edits, "window_minutes": FILE_ACTIVITY_MINUTES},
         "checker": "on" if conflicts.is_configured() else "off",
         "now": now(),  # the page shows "2 min ago" against the server's clock
@@ -932,9 +959,49 @@ def reset_room(room: RoomParam, x_contract_token: str | None = Header(None)) -> 
         require_approval(room, x_contract_token)
     with connect() as conn:
         for table in ("decisions", "conflicts", "people", "decision_requests",
-                      "git_activity", "file_edits", "room_repositories"):
+                      "git_activity", "file_edits", "room_repositories", "share_checks"):
             conn.execute(f"DELETE FROM {table} WHERE room = ?", (room,))
     return {"room": room, "reset": True}
+
+
+@app.post("/shares/check")
+def check_share(share: ShareCheck) -> dict:
+    """Check code that is about to be shared against the team's decisions.
+
+    The reply has two fields:
+      check    - "checked", "not needed" (empty contract) or "skipped: <why>"
+      findings - decisions the code breaks; empty when it fits or was not checked
+    The code is passed to the checker and then forgotten. Only findings are stored.
+    """
+    touch_person(share.room, share.author)
+    existing = load_decisions(share.room)
+    reply = {"check": "checked", "findings": []}
+    if not existing:
+        reply["check"] = "not needed"
+    else:
+        try:
+            review = conflicts.check_share(share.diff, share.files, existing)
+        except conflicts.CheckerUnavailable as error:
+            # Fail open: a broken checker must not stop the team from sharing.
+            log.warning("Share check skipped: %s", error)
+            reply["check"] = f"skipped: {error}"
+        else:
+            by_id = {d["id"]: d for d in existing}
+            reply["findings"] = [
+                {"decision_id": item.existing_id, "decision": by_id[item.existing_id]["text"],
+                 "decided_by": by_id[item.existing_id]["author"],
+                 "file": clean_line(item.file)[:500], "explanation": clean_line(item.explanation)[:400]}
+                for item in review.findings[:5] if item.existing_id in by_id
+            ]
+    if reply["check"] == "checked":
+        with connect() as conn:
+            conn.execute(
+                "INSERT INTO share_checks (room, author, branch, findings, checked_at) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT (room, author) DO UPDATE SET branch = excluded.branch, "
+                "findings = excluded.findings, checked_at = excluded.checked_at",
+                (share.room, share.author, share.branch, json.dumps(reply["findings"]), now()),
+            )
+    return reply
 
 
 @app.post("/files/check")
@@ -943,10 +1010,16 @@ def check_file(activity: FileActivity) -> dict:
         conn.execute("BEGIN")
         require_linked_checkout(conn, activity)
         edits = [dict(row) for row in conn.execute(
+            # Only edits newer than this person's own last edit of the file.
+            # Once they have gone ahead, they are not asked again until a
+            # teammate touches the file again.
             "SELECT author, branch, edited_at FROM file_edits "
             "WHERE room = ? AND path = ? AND author <> ? AND edited_at >= ? "
+            "AND edited_at > COALESCE((SELECT edited_at FROM file_edits "
+            "                          WHERE room = ? AND path = ? AND author = ?), '') "
             "ORDER BY edited_at DESC, author LIMIT 5",
-            (activity.room, activity.path, activity.author, recent_file_cutoff()),
+            (activity.room, activity.path, activity.author, recent_file_cutoff(),
+             activity.room, activity.path, activity.author),
         )]
     return {"edits": edits}
 

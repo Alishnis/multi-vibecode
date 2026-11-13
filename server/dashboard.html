@@ -252,6 +252,7 @@
     border-radius: 5px; font-size: .75rem; background: var(--chip); color: var(--accent);
   }
   .git-pill.approved { color: var(--ok); }
+  .check-finding { font-size: .88rem; border-left: 3px solid var(--amber); padding: 2px 0 2px 9px; margin: 3px 0; }
   .git-pill.changes_requested { color: var(--amber); background: var(--amber-bg); }
   #terminal-dialog { width: min(600px, calc(100% - 28px)); max-height: calc(100dvh - 28px); }
   .terminal-steps { display: grid; gap: 14px; margin: 15px 0; padding-left: 20px; }
@@ -944,6 +945,20 @@
       const statusLabel = statuses[activity.pr_state];
       if (typeof statusLabel === "string") heading.append(el("span", `git-pill ${activity.pr_state}`, statusLabel));
       row.append(heading);
+      // The contract check of this branch's code, from the last time it was shared.
+      const checked = (git.checks || []).find((c) => c.author === activity.author && c.branch === activity.branch);
+      if (checked && checked.findings.length) {
+        heading.append(el("span", "git-pill changes_requested",
+          checked.findings.length === 1 ? "Breaks a team decision" : `Breaks ${checked.findings.length} team decisions`));
+        for (const finding of checked.findings) {
+          const line = el("div", "check-finding");
+          line.append(el("code", null, finding.file), document.createTextNode(` ${finding.explanation}`));
+          line.append(el("div", "meta", `Team decision: ${finding.decision}`));
+          row.append(line);
+        }
+      } else if (checked) {
+        heading.append(el("span", "git-pill approved", "Fits the contract"));
+      }
       if (activity.pr_number) {
         const links = el("div", "git-links");
         const pr = el("a", null, `Pull request #${activity.pr_number}`);

@@ -1,4 +1,13 @@
-"""Report successful Claude Code edits and warn before an overlapping edit."""
+"""Report successful Claude Code edits and pause before an overlapping edit.
+
+Before an edit, the server is asked whether a teammate changed the same file in
+the last 30 minutes. If so, Claude Code stops and asks the person at the
+keyboard whether to go ahead. After they allow it once, further edits to that
+file go through until a teammate changes it again.
+
+Set "overlap": "note" in coord/me.json to get a note for the agent instead of
+a question for the person.
+"""
 
 import json
 import subprocess
@@ -58,7 +67,8 @@ def message(path: str, edits: list[dict]) -> str:
         descriptions.append(f"{author} ({f'{minutes} min ago' if minutes else 'just now'})")
     return (
         f"[Team Contract · FILE OVERLAP] {', '.join(descriptions)} recently edited {label(path)}. "
-        "Before you edit, review their changes or ask your teammate if you should wait."
+        "Edit it only if you have their latest changes or have agreed with them. "
+        "Otherwise review their changes or ask them first."
     )
 
 
@@ -90,9 +100,19 @@ def run(event: dict) -> dict | None:
         result = json.load(response)
     if event["hook_event_name"] == "PreToolUse" and result["edits"]:
         warning = message(path, result["edits"])
+        if me.get("overlap") == "note":
+            # Advisory only: the agent reads the note next to the tool result.
+            return {
+                "systemMessage": warning,
+                "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": warning},
+            }
+        # Pause: Claude Code shows the reason and asks the person to allow or deny the edit.
         return {
-            "systemMessage": warning,
-            "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": warning},
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "ask",
+                "permissionDecisionReason": warning,
+            },
         }
     return None
 

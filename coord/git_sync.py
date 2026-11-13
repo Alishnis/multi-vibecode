@@ -80,7 +80,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def api(me: dict, method: str, path: str, body: dict | None = None, token: str = "") -> dict:
+def api(me: dict, method: str, path: str, body: dict | None = None, token: str = "", timeout: int = 15) -> dict:
     headers = {"Content-Type": "application/json"}
     if token:
         headers["X-Contract-Token"] = token
@@ -94,7 +94,7 @@ def api(me: dict, method: str, path: str, body: dict | None = None, token: str =
         data=json.dumps({"room": me["room"], **body}).encode() if body is not None else None,
     )
     try:
-        with urlopen(request, timeout=15, handlers=(NoRedirect(),)) as response:
+        with urlopen(request, timeout=timeout, handlers=(NoRedirect(),)) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
         raise ValueError(f"Team Contract request failed (HTTP {error.code}): {error.read().decode()[:300]}") from None
@@ -215,6 +215,47 @@ def publish(repo: str, branch: str, base: str, ahead: int, title: str | None, re
     return pr
 
 
+SHARE_DIFF_LIMIT = 12000  # characters of the change sent to the contract check
+
+
+def contract_findings(me: dict, branch: str, ref: str) -> list[dict]:
+    """Ask the server whether the commits about to be shared break a team decision.
+
+    Returns the decisions that the code breaks. Returns nothing when the code
+    fits, and also when the check cannot run: sharing must not depend on it.
+    Sends the changed lines (up to SHARE_DIFF_LIMIT characters) to the server.
+    Set "check_code": false in coord/me.json, or pass --no-check, to send nothing.
+    """
+    # Team Contract's own setup files are not project code.
+    scope = ("--", ".", ":(exclude)coord", ":(exclude).claude", ":(exclude).mcp.json")
+    files = command("git", "diff", "--name-only", f"{ref}...HEAD", *scope).splitlines()
+    diff = command("git", "diff", "--no-color", "--unified=2", f"{ref}...HEAD", *scope)
+    if not diff:
+        return []
+    try:
+        reply = api(me, "POST", "/shares/check", {
+            "author": me["name"], "branch": branch, "files": files[:200], "diff": diff[:SHARE_DIFF_LIMIT],
+        }, timeout=45)
+    except ValueError as error:
+        notice(f"The contract check could not run, so your code was not checked. {str(error)[:160]}")
+        return []
+    check = str(reply.get("check", ""))
+    if check.startswith("skipped"):
+        notice(f"The contract check did not run ({check[9:]}), so your code was not checked.")
+    elif check == "checked" and not reply.get("findings"):
+        cut = " (the first part of a large change)" if len(diff) > SHARE_DIFF_LIMIT else ""
+        notice(f"Contract check passed{cut}: the code fits the team's decisions.")
+    return reply.get("findings") or []
+
+
+def findings_text(findings: list[dict]) -> str:
+    return "\n".join(
+        f"  - {item['file']}: {item['explanation']}\n"
+        f"    Team decision (by {item['decided_by']}): {item['decision']}"
+        for item in findings
+    )
+
+
 def linked_base(me: dict, repo: str) -> str:
     linked = linked_repository(me)
     if not linked:
@@ -293,7 +334,8 @@ def pull_request_state(pr: dict | None) -> str | None:
     return "in_review"
 
 
-def sync(me: dict, repo: str, action: str, title: str | None, ready: bool = False) -> None:
+def sync(me: dict, repo: str, action: str, title: str | None, ready: bool = False,
+         check: bool = True, anyway: bool = False) -> None:
     base = linked_base(me, repo)
     branch = command("git", "branch", "--show-current")
     if not branch:
@@ -306,6 +348,17 @@ def sync(me: dict, repo: str, action: str, title: str | None, ready: bool = Fals
         "git", "rev-list", "--left-right", "--count", f"{ref}...HEAD",
     ).split())
     if action == "publish":
+        findings = contract_findings(me, branch, ref) if check and ahead and me.get("check_code", True) else []
+        if findings and not anyway:
+            raise ValueError(
+                "Not shared. This code breaks a team decision:\n" + findings_text(findings) + "\n"
+                "  Change the code to follow the decision, or settle the decision with your team "
+                "on the dashboard.\n"
+                f"  To share it as it is, run {CLI} publish --anyway."
+            )
+        if findings:
+            notice("Shared although this code breaks a team decision. The dashboard shows it:")
+            print(findings_text(findings))
         pr = publish(repo, branch, base, ahead, title, ready)
     else:
         pr = open_pr(repo, branch, base)
@@ -498,6 +551,10 @@ def main() -> None:
     publish_parser = subparsers.add_parser("publish", help="push committed work and open or reuse its PR")
     publish_parser.add_argument("--title", help="title for a new pull request")
     publish_parser.add_argument("--ready", action="store_true", help="make the pull request ready for review")
+    publish_parser.add_argument("--anyway", action="store_true",
+                                help="share even if the code breaks a team decision")
+    publish_parser.add_argument("--no-check", action="store_true",
+                                help="do not send the change to the contract check")
     watch_parser = subparsers.add_parser("watch", help="notify about approved PRs and sync after merge")
     watch_parser.add_argument("--interval", type=int, default=30, help="seconds between checks (minimum 15)")
     watch_parser.add_argument("--notify-only", action="store_true", help="show updates without applying them")
@@ -525,7 +582,8 @@ def main() -> None:
             linked_base(me, origin_repository())
             watch(me, args.interval, args.notify_only, args.once, args.any_merge)
         else:
-            sync(me, origin_repository(), args.action, getattr(args, "title", None), getattr(args, "ready", False))
+            sync(me, origin_repository(), args.action, getattr(args, "title", None), getattr(args, "ready", False),
+                 check=not getattr(args, "no_check", False), anyway=getattr(args, "anyway", False))
     except (OSError, ValueError, KeyError) as error:
         sys.exit(f"[Team Contract] {error}")
     except KeyboardInterrupt:

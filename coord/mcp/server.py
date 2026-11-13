@@ -179,6 +179,9 @@ SHARE_TOOL = {
         "shared, so first commit the files that belong to this task with git (stage the "
         "specific files; leave out secrets and unrelated files). If the reply says the "
         "current branch is the shared branch, call start_task and then share_work again. "
+        "Before pushing, the changed code is checked against the team contract. If the "
+        "reply says the code breaks a team decision, nothing was shared: tell the user "
+        "which decision and where, and either fix the code or ask the user. "
         "The reply includes the pull request link: give it to the user."
     ),
     "inputSchema": {
@@ -192,6 +195,13 @@ SHARE_TOOL = {
             "draft": {
                 "type": "boolean",
                 "description": "true = open it as a draft because the work is not ready for review. Default false.",
+            },
+            "share_anyway": {
+                "type": "boolean",
+                "description": (
+                    "true = share even though the code breaks a team decision. Use it only "
+                    "after the user has been told about the broken decision and said to share anyway."
+                ),
             },
         },
     },
@@ -359,6 +369,8 @@ def share_work(arguments: dict) -> str:
     title = " ".join(str(arguments.get("title") or "").split())
     if title:
         args.append(f"--title={title}")
+    if arguments.get("share_anyway"):
+        args.append("--anyway")
     return run_git_helper(*args)
 
 
