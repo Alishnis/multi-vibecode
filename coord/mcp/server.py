@@ -170,7 +170,9 @@ def record_decision(arguments: dict) -> str:
             f"Existing decision: \"{conflict.get('existing_text', '')}\" "
             f"(by {conflict.get('existing_author', 'a teammate')}). "
             "Stop. Do not write code for this decision. Tell the user about the "
-            "conflict and ask whether to follow the team's decision or change it."
+            "conflict. A human settles it on the team dashboard: keep the team's "
+            "decision, or switch to the new one. If they switch, the contract in "
+            "your next prompt shows it. Until then, follow the existing decision."
         )
 
     duplicate = reply.get("duplicate")

@@ -57,7 +57,7 @@ class PublishTest(unittest.TestCase):
             if path.startswith("/git?"):
                 return {"repository": None}
             self.assertEqual(token, "local-test")
-            if path == "/git/link-access":
+            if path == "/git/link-access?room=demo":
                 self.assertFalse(any(args[:3] == ("gh", "repo", "create") for args in commands))
             return {"ok": True}
 
@@ -69,7 +69,7 @@ class PublishTest(unittest.TestCase):
         create = next(args for args in commands if args[:3] == ("gh", "repo", "create"))
         self.assertIn("--private", create)
         self.assertIn("--push", create)
-        self.assertEqual(operations[-2:], [("GET", "/git/link-access"), ("PUT", "/git")])
+        self.assertEqual(operations[-2:], [("GET", "/git/link-access?room=demo"), ("PUT", "/git")])
 
     def test_two_pushes_reuse_one_draft_and_fetch_preserves_local_work(self):
         with tempfile.TemporaryDirectory() as directory:

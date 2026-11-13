@@ -242,6 +242,20 @@
   .file-row code { font-size: .86rem; }
   .file-overlap { color: var(--amber); background: var(--amber-bg); border-radius: 5px; padding: 2px 6px; margin-left: 6px; font-size: .7rem; font-weight: 700; white-space: nowrap; }
   .answer-primary { background: var(--chip); }
+  .metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .side { display: flex; flex-direction: column; gap: 8px; }
+  .side .action { align-self: flex-start; margin-top: auto; }
+  .action.small { padding: 3px 9px; font-size: .78rem; }
+  .decision { grid-template-columns: 95px minmax(0, 1fr) auto; }
+  .retire { color: var(--muted); border-color: var(--line); background: none; }
+  .retire:hover, .retire:focus-visible { color: var(--danger); border-color: var(--danger); }
+  .hint { color: var(--muted); font-size: .85rem; margin: 8px 0 0; }
+  details.retired { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+  details.retired summary { cursor: pointer; color: var(--muted); font-size: .88rem; }
+  .retired-row { padding: 8px 0; font-size: .9rem; }
+  .retired-row s { color: var(--muted); }
+  footer #set-key { margin-left: 0; color: var(--accent); border-color: var(--accent); }
+  dialog p.meta { margin: 0 0 4px; font-size: .92rem; overflow-wrap: anywhere; }
   @media (max-width: 960px) {
     .app-shell { grid-template-columns: 164px minmax(0, 1fr); }
     .rail { padding: 23px 13px; }
@@ -256,6 +270,7 @@
     .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .sides { grid-template-columns: minmax(0, 1fr); }
     .decision { grid-template-columns: minmax(0, 1fr); }
+    .decision .retire { justify-self: start; }
     .column { display: contents; }
     #file-panel { grid-row: 1; }
   }
@@ -283,6 +298,7 @@
   <dl class="metrics">
     <div class="metric"><dt>Active teammates</dt><dd id="active-total">—</dd></div>
     <div class="metric"><dt>Saved decisions</dt><dd id="decisions-total">—</dd></div>
+    <div class="metric"><dt>Open conflicts</dt><dd id="conflicts-total">—</dd></div>
     <div class="metric"><dt>Open requests</dt><dd id="requests-total">—</dd></div>
     <div class="metric"><dt>Files with overlap</dt><dd id="overlap-total">—</dd></div>
   </dl>
@@ -300,6 +316,10 @@
     <section class="panel" id="contract">
       <h2>Team decisions</h2>
       <ul id="decisions"></ul>
+      <details class="retired" id="retired" hidden>
+        <summary id="retired-summary"></summary>
+        <ul id="retired-list"></ul>
+      </details>
     </section>
     <section id="git-panel" class="panel">
       <h2>GitHub activity</h2>
@@ -326,6 +346,8 @@
 
   <footer>
     <span id="checker"></span>
+    <span id="key-status"></span>
+    <button id="set-key" type="button" hidden>Set team key</button>
     <button id="reset" type="button">Reset room</button>
   </footer>
 </main>
@@ -337,11 +359,25 @@
     <div id="answer-options" class="answer-options" aria-label="Suggested answers"></div>
     <label>Decision<textarea id="answer-text" required maxlength="500" rows="3"></textarea></label>
     <label>Your name<input id="answer-author" required maxlength="50" autocomplete="name"></label>
-    <label>Approval token<input id="answer-token" type="password" required autocomplete="off"></label>
+    <label>Team key<input id="answer-token" type="password" required autocomplete="off"></label>
     <p id="answer-error" class="form-error" role="alert" hidden></p>
     <div class="dialog-actions">
       <button class="action answer-primary" id="answer-submit">Approve decision</button>
       <button class="action" id="answer-cancel" type="button">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm-dialog" aria-labelledby="confirm-title">
+  <form id="confirm-form">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-text" class="meta"></p>
+    <label>Your name<input id="confirm-author" required maxlength="50" autocomplete="name"></label>
+    <label><span id="confirm-key-label">Team key</span><input id="confirm-key" type="password" required maxlength="200" autocomplete="off"></label>
+    <p id="confirm-error" class="form-error" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button class="action answer-primary" id="confirm-submit"></button>
+      <button class="action" id="confirm-cancel" type="button">Cancel</button>
     </div>
   </form>
 </dialog>
@@ -368,6 +404,93 @@
     if (className) node.className = className;
     if (text != null) node.textContent = text;
     return node;
+  }
+
+  // The name is remembered on this computer. The team key is remembered only
+  // until this browser tab is closed. Both are optional conveniences.
+  const memory = {
+    read(area, key) { try { return window[area].getItem(key) || ""; } catch { return ""; } },
+    write(area, key, value) { try { window[area].setItem(key, value); } catch { /* storage is blocked */ } },
+  };
+  const savedName = () => memory.read("localStorage", "tc-name");
+  const savedKey = () => memory.read("sessionStorage", "tc-key:" + room);
+  function remember(name, key) {
+    memory.write("localStorage", "tc-name", name);
+    if (key) memory.write("sessionStorage", "tc-key:" + room, key);
+  }
+
+  // Send one change to the server. The team key travels in a header.
+  async function send(path, body, key) {
+    const headers = {"Content-Type": "application/json"};
+    if (key) headers["X-Contract-Token"] = key;
+    const response = await fetch(path, { method: "POST", headers, body: body ? JSON.stringify(body) : undefined });
+    if (!response.ok) {
+      let detail;
+      try { ({detail} = await response.json()); } catch { /* not JSON */ }
+      throw new Error(typeof detail === "string" ? detail : "That was not accepted. Check the fields and try again.");
+    }
+    return response.json();
+  }
+
+  // One dialog for every human-only action: it asks who you are and the team key.
+  let confirmRun = null;
+  function askHuman({title, text, button, newKey = false, run}) {
+    confirmRun = run;
+    $("confirm-form").reset();
+    $("confirm-error").hidden = true;
+    $("confirm-title").textContent = title;
+    $("confirm-text").textContent = text;
+    $("confirm-submit").textContent = button;
+    $("confirm-key-label").textContent = newKey ? "Choose a team key (8 characters or more)" : "Team key";
+    $("confirm-key").minLength = newKey ? 8 : 1;
+    $("confirm-author").value = savedName();
+    $("confirm-key").value = newKey ? "" : savedKey();
+    $("confirm-dialog").showModal();
+  }
+  $("confirm-cancel").addEventListener("click", () => $("confirm-dialog").close());
+  $("confirm-dialog").addEventListener("close", () => { $("confirm-key").value = ""; confirmRun = null; });
+  $("confirm-dialog").addEventListener("cancel", (event) => {
+    if ($("confirm-submit").disabled) event.preventDefault();
+  });
+  $("confirm-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!confirmRun || $("confirm-submit").disabled) return;
+    const author = $("confirm-author").value.trim();
+    const key = $("confirm-key").value;
+    $("confirm-error").hidden = true;
+    $("confirm-submit").disabled = $("confirm-cancel").disabled = true;
+    try {
+      await confirmRun({author, key});
+      remember(author, key);
+      $("confirm-dialog").close();
+      tick();
+    } catch (error) {
+      $("confirm-error").textContent = error.message || "Could not save. Try again.";
+      $("confirm-error").hidden = false;
+    } finally {
+      $("confirm-submit").disabled = $("confirm-cancel").disabled = false;
+    }
+  });
+
+  function settleConflict(c, action) {
+    const keep = action === "keep";
+    askHuman({
+      title: keep ? "Keep the team's decision?" : "Switch the team's decision?",
+      text: keep
+        ? `The team keeps: ${c.existing_text} The request from ${c.new_author}'s AI is closed.`
+        : `The team switches to: ${c.new_text} This retires: ${c.existing_text} Every teammate's AI is told on its next prompt.`,
+      button: keep ? "Keep it" : "Switch",
+      run: ({author, key}) => send(`/conflicts/${c.id}/resolve`, {room, author, action}, key),
+    });
+  }
+
+  function retireDecision(d) {
+    askHuman({
+      title: "Retire this decision?",
+      text: `This leaves the contract: ${d.text} It stays visible as history, and every teammate's AI is told on its next prompt.`,
+      button: "Retire",
+      run: ({author, key}) => send(`/decisions/${d.id}/retire`, {room, author}, key),
+    });
   }
 
   function ago(seconds) {
@@ -411,7 +534,8 @@
     // Conflicts
     const conflictList = $("conflict-list");
     conflictList.replaceChildren();
-    for (const c of state.conflicts) {
+    const openConflicts = state.conflicts.filter((c) => !c.resolution);
+    for (const c of openConflicts) {
       const key = "c" + c.id;
       nowSeen.add(key);
       const card = el("div", "conflict" + (isFresh(key) ? " fresh" : ""));
@@ -426,12 +550,26 @@
       const decided = el("div", "side");
       decided.append(el("div", "who", `Team already decided (${c.existing_author})`),
                      el("div", "what", c.existing_text || "(see contract)"));
+      if (state.approval_enabled) {
+        const replace = el("button", "action small", "Switch to this");
+        replace.type = "button";
+        replace.addEventListener("click", () => settleConflict(c, "replace"));
+        wanted.append(replace);
+        const keep = el("button", "action small", "Keep this");
+        keep.type = "button";
+        keep.addEventListener("click", () => settleConflict(c, "keep"));
+        decided.append(keep);
+      }
       sides.append(wanted, decided);
       card.append(top, el("p", "why", c.explanation), sides);
+      if (!state.approval_enabled) {
+        card.append(el("p", "hint", "To settle this here, set a team key at the bottom of the page."));
+      }
       conflictList.append(card);
     }
-    $("conflicts").hidden = state.conflicts.length === 0;
-    $("conflict-count").textContent = state.conflicts.length || "";
+    $("conflicts").hidden = openConflicts.length === 0;
+    $("conflict-count").textContent = openConflicts.length ? `${openConflicts.length} open` : "";
+    $("conflicts-total").textContent = openConflicts.length;
 
     // Decisions, newest first
     const decisions = $("decisions");
@@ -445,6 +583,13 @@
       meta.append(timeSpan(d.created_at));
       body.append(el("div", "what", d.text), meta);
       row.append(el("span", "tag " + d.category, d.category), body);
+      if (state.approval_enabled) {
+        const retire = el("button", "action small retire", "Retire");
+        retire.type = "button";
+        retire.setAttribute("aria-label", `Retire decision: ${d.text}`);
+        retire.addEventListener("click", () => retireDecision(d));
+        row.append(retire);
+      }
       decisions.append(row);
     }
     if (state.decisions.length === 0) {
@@ -452,17 +597,41 @@
     }
     $("decisions-total").textContent = state.decisions.length;
 
+    // Retired decisions: history, folded away by default
+    const retired = state.retired_decisions || [];
+    $("retired").hidden = retired.length === 0;
+    $("retired-summary").textContent = `Retired decisions (${retired.length})`;
+    const retiredList = $("retired-list");
+    retiredList.replaceChildren();
+    for (const d of retired) {
+      const row = el("li", "retired-row");
+      row.append(el("s", null, d.text));
+      const note = d.replaced_by_text ? `Replaced by: ${d.replaced_by_text} · ` : "";
+      const meta = el("div", "meta", `${note}Retired by ${d.retired_by} · `);
+      meta.append(timeSpan(d.retired_at));
+      row.append(meta);
+      retiredList.append(row);
+    }
+
     // Activity: decisions and conflicts together, newest first
     const events = [
       ...state.decisions.map((d) => ({ key: "d" + d.id, time: d.created_at, bad: false, who: d.author, text: `recorded: ${d.text}` })),
       ...state.conflicts.map((c) => ({ key: "c" + c.id, time: c.created_at, bad: true, who: c.new_author, text: `was stopped: ${c.new_text}` })),
+      // What humans decided on this page
+      ...state.conflicts.filter((c) => c.resolution === "kept").map((c) => (
+        { key: "k" + c.id, time: c.resolved_at, human: true, who: c.resolved_by, text: `kept the team's decision over: ${c.new_text}` })),
+      ...state.conflicts.filter((c) => c.resolution === "replaced").map((c) => (
+        { key: "k" + c.id, time: c.resolved_at, human: true, who: c.resolved_by, text: `switched the team to: ${c.new_text}` })),
+      ...retired.filter((d) => !d.replaced_by).map((d) => (
+        { key: "r" + d.id, time: d.retired_at, human: true, who: d.retired_by, text: `retired: ${d.text}` })),
     ].sort((a, b) => (a.time < b.time ? 1 : a.time > b.time ? -1 : 0)).slice(0, MAX_EVENTS);
     const activity = $("activity");
     activity.replaceChildren();
     for (const e of events) {
+      nowSeen.add(e.key);
       const row = el("li", "event" + (e.bad ? " bad" : "") + (isFresh(e.key) ? " fresh" : ""));
       const line = el("div");
-      line.append(el("b", null, `${e.who}'s AI `), document.createTextNode(e.text));
+      line.append(el("b", null, e.human ? `${e.who} ` : `${e.who}'s AI `), document.createTextNode(e.text));
       const meta = el("div", "meta");
       meta.append(timeSpan(e.time));
       row.append(line, meta);
@@ -475,7 +644,7 @@
 
   function renderRequests(state) {
     const requests = state.decision_requests || [];
-    const answers = new Map(state.decisions.map((d) => [d.id, d]));
+    const answers = new Map([...state.decisions, ...(state.retired_decisions || [])].map((d) => [d.id, d]));
     $("requests").hidden = !requests.length;
     const openCount = requests.filter((r) => r.decision_id === null).length;
     $("request-count").textContent = `${openCount} open`;
@@ -496,7 +665,7 @@
         button.addEventListener("click", () => showAnswer(request));
         card.append(button);
       } else {
-        card.append(el("p", "meta", "Approval is disabled on this server."));
+        card.append(el("p", "hint", "To answer here, set a team key at the bottom of the page."));
       }
       list.append(card);
     }
@@ -506,6 +675,8 @@
     activeRequest = request;
     $("answer-form").reset();
     $("answer-error").hidden = true;
+    $("answer-author").value = savedName();
+    $("answer-token").value = savedKey();
     $("answer-question").textContent = request.question;
     const options = $("answer-options");
     options.replaceChildren();
@@ -545,6 +716,7 @@
         const {detail} = await response.json();
         throw new Error(typeof detail === "string" ? detail : "Enter a name and a decision to approve.");
       }
+      remember($("answer-author").value.trim(), $("answer-token").value);
       $("answer-dialog").close();
       tick();
     } catch (error) {
@@ -637,7 +809,7 @@
 
     // Redraw the lists only when something was added or removed, so the
     // highlight on a new item is not interrupted by the next refresh.
-    const signature = JSON.stringify([state.decisions, state.conflicts, state.decision_requests, state.git, state.files, approvalEnabled]);
+    const signature = JSON.stringify([state.decisions, state.retired_decisions, state.conflicts, state.decision_requests, state.git, state.files, approvalEnabled]);
     if (signature !== lastSignature) {
       lastSignature = signature;
       renderLists(state);
@@ -654,16 +826,27 @@
     checker.textContent = state.checker === "on"
       ? "Conflict check: on"
       : "Conflict check: OFF (no API key on the server). Decisions are saved unchecked.";
+    $("key-status").textContent = state.room_key ? "Team key: set" : "Team key: not set";
+    $("set-key").hidden = state.room_key;
   }
 
+  $("set-key").addEventListener("click", () => askHuman({
+    title: "Set the team key",
+    text: "The team key is a password for this room. People need it to answer requests, settle conflicts and retire decisions. AI agents never see it. Share it with your teammates. It can be set only once.",
+    button: "Set team key",
+    newKey: true,
+    run: ({author, key}) => send("/rooms/key", {room, author, key}),
+  }));
+
   $("reset").addEventListener("click", async () => {
-    if (!confirm(`Delete every decision, conflict and request in room "${room}"? This cannot be undone.`)) return;
-    const token = approvalEnabled ? prompt("Enter the approval token to reset this room.") : null;
-    if (approvalEnabled && !token) return;
-    const response = await fetch(`/reset?room=${encodeURIComponent(room)}`, {
-      method: "POST", headers: token ? {"X-Contract-Token": token} : {},
-    });
-    if (!response.ok) alert("Could not reset this room. Check the approval token and try again.");
+    const path = `/reset?room=${encodeURIComponent(room)}`;
+    const warning = `Delete every decision, conflict, request and the GitHub link in room "${room}"? This cannot be undone.`;
+    if (approvalEnabled) {
+      askHuman({ title: "Reset this room?", text: warning, button: "Delete everything", run: ({key}) => send(path, null, key) });
+      return;
+    }
+    if (!confirm(warning)) return;
+    try { await send(path); } catch (error) { alert(error.message); }
     tick();
   });
 

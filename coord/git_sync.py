@@ -89,10 +89,10 @@ def api(me: dict, method: str, path: str, body: dict | None = None, token: str =
 
 def approval_token() -> str:
     if not sys.stdin.isatty():
-        raise ValueError("Run this command in a terminal to enter the approval token.")
-    token = getpass.getpass("Team Contract approval token: ")
+        raise ValueError("Run this command in a terminal to enter the team key.")
+    token = getpass.getpass("Team key for this room: ")
     if not token:
-        raise ValueError("Enter the server approval token to link the room.")
+        raise ValueError("Enter the room's team key (set on the dashboard) to link the room.")
     return token
 
 
@@ -123,7 +123,8 @@ def create_repository(me: dict, repo: str) -> None:
         raise ValueError("Switch to a named branch before creating a repository.")
     command("git", "rev-parse", "--verify", "HEAD")
     token = approval_token()
-    api(me, "GET", "/git/link-access", token=token)
+    query = urllib.parse.urlencode({"room": me["room"]})
+    api(me, "GET", f"/git/link-access?{query}", token=token)
     command("gh", "repo", "create", repo, "--private", "--source", ".", "--remote", "origin", "--push")
     print(f"Created private repository https://github.com/{repo}.", flush=True)
     link(me, origin_repository(), token)
