@@ -59,6 +59,12 @@ def github_repository(remote: str) -> str:
 
 
 def origin_repository() -> str:
+    if "origin" not in command("git", "remote").splitlines():
+        raise ValueError(
+            "This project is not connected to a GitHub repository yet. The room owner connects it "
+            f"once in a terminal: {CLI} link for an existing repository, or {CLI} create OWNER/REPO "
+            "for a new one. See the setup guide on the room dashboard."
+        )
     remotes = command("git", "remote", "get-url", "--all", "origin").splitlines()
     push_remotes = command("git", "remote", "get-url", "--push", "--all", "origin").splitlines()
     if len(remotes) != 1 or len(push_remotes) != 1:

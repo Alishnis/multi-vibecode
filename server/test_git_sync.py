@@ -110,6 +110,11 @@ class PublishTest(unittest.TestCase):
             git("commit", "-q", "--allow-empty", "-m", "API work")
             (repo / "unfinished.txt").write_text("local work")
             self.assertEqual(git_sync.github_repository("git@github.com:Example/Todos.git"), "example/todos")
+            with patch.object(git_sync, "PROJECT", path):  # a folder with no origin at all
+                subprocess.check_call(["git", "init", "-q", str(path / "empty")])
+                with patch.object(git_sync, "PROJECT", path / "empty"), \
+                        self.assertRaisesRegex(ValueError, "not connected to a GitHub repository yet"):
+                    git_sync.origin_repository()
             with self.assertRaises(ValueError):
                 git_sync.github_repository("https://github.com@other.example/Example/Todos")
             commands = git_sync.command
