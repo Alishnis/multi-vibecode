@@ -223,7 +223,11 @@ def main() -> None:
             "Each teammate runs the installer once in their own checkout."
         )
     if args.guided:
-        subprocess.run([sys.executable, str(target / "coord/team.py"), "--action", "setup"], cwd=target, check=True)
+        # Setup asks questions, so it needs a person at a terminal. When it cannot
+        # finish, say so and keep its exit code instead of printing a traceback.
+        done = subprocess.run([sys.executable, str(target / "coord/team.py"), "--action", "setup"], cwd=target)
+        if done.returncode:
+            sys.exit(f"Setup did not finish. Run it again with: python3 coord/team.py --action setup")
 
 
 if __name__ == "__main__":

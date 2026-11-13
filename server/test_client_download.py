@@ -75,11 +75,11 @@ class ClientDownloadTest(unittest.TestCase):
 
     def test_public_homepage_and_legacy_room_links(self):
         client = TestClient(server.app)
-        self.assertIn('Build together.', client.get('/').text)
+        self.assertIn('id="setup-command"', client.get('/').text)  # the homepage has the one-paste setup
         for route in ('/app?room=demo', '/?room=demo'):
             self.assertIn('id="workspace-title"', client.get(route).text)
         self.assertIn('--guided', client.get('/install.sh').text)
-        self.assertIn('--brand-blue', client.get('/design.css').text)
+        self.assertIn('--am-blue', client.get('/design.css').text)
 
     def test_reinstall_preserves_sync_preference_and_other_agent_configuration(self):
         with tempfile.TemporaryDirectory() as directory:

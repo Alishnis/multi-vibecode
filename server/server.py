@@ -1414,7 +1414,10 @@ def dashboard() -> FileResponse:
 
 @app.get("/design.css", include_in_schema=False)
 def design_css() -> FileResponse:
-    return FileResponse(PROJECT_ROOT / "server/design.css", media_type="text/css")
+    # "no-cache" still allows a stored copy, but the browser must ask the server
+    # whether it changed. Without it, a deploy left visitors on the old styles.
+    return FileResponse(PROJECT_ROOT / "server/design.css", media_type="text/css",
+                        headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/install.sh", include_in_schema=False)
