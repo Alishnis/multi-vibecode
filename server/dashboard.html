@@ -169,6 +169,11 @@
   .answer-options button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
   .dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
   .form-error { color: var(--danger); }
+  #git-panel { margin-bottom: 24px; }
+  #git-repository { margin: 0 0 10px; overflow-wrap: anywhere; }
+  #git-panel a { color: var(--accent); }
+  .git-row { padding: 8px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  .git-row a { margin-left: 8px; }
 
   @media (max-width: 860px) {
     .grid, .sides { grid-template-columns: 1fr; }
@@ -195,6 +200,12 @@
   <section id="conflicts" hidden>
     <h2>Conflicts <span class="count" id="conflict-count"></span></h2>
     <div id="conflict-list"></div>
+  </section>
+
+  <section id="git-panel" class="panel" hidden>
+    <h2>GitHub activity</h2>
+    <p id="git-repository"></p>
+    <ul id="git-activity"></ul>
   </section>
 
   <div class="grid">
@@ -440,6 +451,35 @@
     $("live-text").textContent = ok ? "live" : "connection lost";
   }
 
+  function renderGit(git) {
+    $("git-panel").hidden = !git?.repository;
+    if (!git?.repository) return;
+    const {repository, base_branch} = git.repository;
+    const url = `https://github.com/${repository}`;
+    const link = el("a", null, repository);
+    link.href = url;
+    $("git-repository").replaceChildren(link, document.createTextNode(` · Base branch: ${base_branch}`));
+    const rows = $("git-activity");
+    rows.replaceChildren();
+    for (const activity of git.activity) {
+      const row = el("li", "git-row");
+      row.append(el("strong", null, activity.author), document.createTextNode(` · ${activity.branch}`));
+      if (activity.pr_number) {
+        const pr = el("a", null, `PR #${activity.pr_number}`);
+        pr.href = `${url}/pull/${activity.pr_number}`;
+        row.append(pr);
+      }
+      const status = activity.behind
+        ? `${activity.ahead} ahead · ${activity.behind} behind ${base_branch}`
+        : `${activity.ahead} ahead · Up to date with ${base_branch}`;
+      const meta = el("div", "meta", `${status} · Checked `);
+      meta.append(timeSpan(activity.checked_at));
+      row.append(meta);
+      rows.append(row);
+    }
+    if (!git.activity.length) rows.append(el("li", "meta", "No branch reports yet."));
+  }
+
   async function tick() {
     if (loading) return;
     loading = true;
@@ -459,11 +499,12 @@
 
     // Redraw the lists only when something was added or removed, so the
     // highlight on a new item is not interrupted by the next refresh.
-    const signature = JSON.stringify([state.decisions, state.conflicts, state.decision_requests, approvalEnabled]);
+    const signature = JSON.stringify([state.decisions, state.conflicts, state.decision_requests, state.git, approvalEnabled]);
     if (signature !== lastSignature) {
       lastSignature = signature;
       renderLists(state);
       renderRequests(state);
+      renderGit(state.git);
     }
     renderPeople(state.people || []);
     updateTimes(state.now);

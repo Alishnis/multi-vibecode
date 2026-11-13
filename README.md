@@ -58,3 +58,14 @@ Update your checkout, rerun the installer for each test project, and restart Cla
 3. On the dashboard, select **Answer request**, choose a suggested decision or write one, and enter your name and approval token. The answer joins the contract once. A fresh prompt in either project reads it through the existing hook.
 
 To enable dashboard approval, set a long random `CONTRACT_APPROVAL_TOKEN` in your local `.env` or in the Render service's environment settings. Share the token with the people who should approve decisions. Keep it out of project files and URLs. When set, the same token is required to reset rooms. It protects approval and reset, while the existing room-code access for reading and proposing decisions still applies.
+
+## Share code through GitHub
+
+Run the updated installer at the root of each teammate's clone. The optional Git commands need Git and the GitHub CLI (`gh auth login`). Give each teammate access on GitHub.
+
+1. **Link the room once.** From an installed project with an existing GitHub `origin`, run `python3 coord/git_sync.py link` and enter the server approval token. The command reads GitHub's default branch. For a new project with an initial local commit and no `origin`, run `python3 coord/git_sync.py create OWNER/REPO` to create a private GitHub repo, push the current branch's committed history, and link the room. Review that history before running the command. Teammates clone the repo and use the same room code and server URL.
+2. **Work on a task branch.** For example, run `git switch -c ali/todo-api`. Stage the files you want to share and commit them yourself.
+3. **Push and open a draft PR.** Run `python3 coord/git_sync.py publish --title "Add todo API"`. The command pushes your existing commits and opens a draft PR. Run it again after later commits to push to the same branch and reuse the open PR.
+4. **Check for new base-branch commits.** Run `python3 coord/git_sync.py status` to fetch the base branch and report your current branch, open PR, and ahead/behind counts in the dashboard. The timestamp shows when each teammate last checked. After a human reviews and merges a PR, teammates update their own checkouts when ready.
+
+The dashboard gets repository and branch metadata only. GitHub handles the source code, credentials, and PRs. The publish command is the push entry point for automatic draft creation. Plain `git push` still behaves normally. The CLI has no pull, merge, force-push, or automatic commit step.

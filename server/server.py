@@ -113,6 +113,22 @@ def create_tables() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS room_repositories (
+                room TEXT PRIMARY KEY, repository TEXT NOT NULL, base_branch TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS git_activity (
+                room TEXT NOT NULL, author TEXT NOT NULL, branch TEXT NOT NULL,
+                ahead INTEGER NOT NULL, behind INTEGER NOT NULL, pr_number INTEGER,
+                checked_at TEXT NOT NULL, PRIMARY KEY (room, author)
+            )
+            """
+        )
 
 
 def now() -> str:
@@ -225,6 +241,28 @@ class NewRequest(RoomAuthor):
 
 class RequestAnswer(RoomAuthor):
     text: str = Field(min_length=1, max_length=500)
+
+
+class RoomRepository(BaseModel):
+    room: str = Field(min_length=1, max_length=50)
+    repository: str = Field(max_length=141, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}/[a-zA-Z0-9_.-]{1,100}$")
+    base_branch: str = Field(min_length=1, max_length=250)
+
+
+class GitActivity(RoomAuthor):
+    repository: str = Field(max_length=141)
+    base_branch: str = Field(min_length=1, max_length=250)
+    branch: str = Field(min_length=1, max_length=250)
+    ahead: int = Field(ge=0)
+    behind: int = Field(ge=0)
+    pr_number: int | None = Field(default=None, gt=0)
+
+
+def room_repository(conn: sqlite3.Connection, room: str) -> dict | None:
+    row = conn.execute(
+        "SELECT repository, base_branch FROM room_repositories WHERE room = ?", (room,),
+    ).fetchone()
+    return dict(row) if row else None
 
 
 def save_decision(decision: NewDecision, conn: sqlite3.Connection | None = None) -> dict:
@@ -436,6 +474,12 @@ def get_contract(room: str, name: str | None = None) -> dict:
 def get_state(room: str) -> dict:
     """Everything the dashboard shows."""
     decisions, requests = load_contract(room)
+    with connect() as conn:
+        repository = room_repository(conn, room)
+        git_activity = [dict(row) for row in conn.execute(
+            "SELECT author, branch, ahead, behind, pr_number, checked_at "
+            "FROM git_activity WHERE room = ? ORDER BY author", (room,),
+        )]
     return {
         "room": room,
         "decisions": decisions,
@@ -443,9 +487,60 @@ def get_state(room: str) -> dict:
         "decision_requests": requests,
         "approval_enabled": bool(os.environ.get("CONTRACT_APPROVAL_TOKEN")),
         "people": load_people(room),
+        "git": {"repository": repository, "activity": git_activity},
         "checker": "on" if conflicts.is_configured() else "off",
         "now": now(),  # the page shows "2 min ago" against the server's clock
     }
+
+
+@app.get("/git")
+def get_repository(room: str) -> dict:
+    with connect() as conn:
+        return {"repository": room_repository(conn, room)}
+
+
+@app.get("/git/link-access")
+def check_link_access(x_contract_token: str | None = Header(None)) -> dict:
+    require_approval_token(x_contract_token)
+    return {"ok": True}
+
+
+@app.put("/git")
+def link_repository(link: RoomRepository, x_contract_token: str | None = Header(None)) -> dict:
+    require_approval_token(x_contract_token)
+    repository = {"repository": link.repository.lower(), "base_branch": link.base_branch}
+    if repository["repository"].split("/")[1] in {".", ".."}:
+        raise HTTPException(422, "Invalid repository name.")
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO room_repositories (room, repository, base_branch) VALUES (?, ?, ?) "
+            "ON CONFLICT (room) DO NOTHING",
+            (link.room, repository["repository"], link.base_branch),
+        )
+        if room_repository(conn, link.room) != repository:
+            raise HTTPException(409, "This room already has a different repository or base branch.")
+    return {"repository": repository}
+
+
+@app.post("/git/activity")
+def report_git_activity(activity: GitActivity) -> dict:
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        repository = room_repository(conn, activity.room)
+        if repository != {"repository": activity.repository.lower(), "base_branch": activity.base_branch}:
+            raise HTTPException(409, "The local repository and base branch must match the linked room.")
+        conn.execute(
+            """
+            INSERT INTO git_activity (room, author, branch, ahead, behind, pr_number, checked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (room, author) DO UPDATE SET
+                branch = excluded.branch, ahead = excluded.ahead, behind = excluded.behind,
+                pr_number = excluded.pr_number, checked_at = excluded.checked_at
+            """,
+            (activity.room, activity.author, activity.branch, activity.ahead,
+             activity.behind, activity.pr_number, now()),
+        )
+    return {"ok": True}
 
 
 @app.post("/reset")
@@ -454,7 +549,7 @@ def reset_room(room: str, x_contract_token: str | None = Header(None)) -> dict:
     if os.environ.get("CONTRACT_APPROVAL_TOKEN"):
         require_approval_token(x_contract_token)
     with connect() as conn:
-        for table in ("decisions", "conflicts", "people", "decision_requests"):
+        for table in ("decisions", "conflicts", "people", "decision_requests", "git_activity"):
             conn.execute(f"DELETE FROM {table} WHERE room = ?", (room,))
     return {"room": room, "reset": True}
 

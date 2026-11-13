@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Link a Team Contract room to GitHub and publish committed task work."""
+
+import argparse
+import getpass
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+
+PROJECT = Path(__file__).resolve().parent.parent
+REPOSITORY = r"[a-zA-Z0-9][a-zA-Z0-9-]{0,38}/[a-zA-Z0-9_.-]{1,100}"
+
+
+def command(*args: str) -> str:
+    env = {**os.environ, "GH_PROMPT_DISABLED": "1", "GIT_TERMINAL_PROMPT": "0"}
+    try:
+        run = subprocess.run(args, cwd=PROJECT, capture_output=True, text=True, env=env, timeout=90)
+    except FileNotFoundError:
+        raise ValueError(f"Install {args[0]} before running this command.") from None
+    except subprocess.TimeoutExpired:
+        raise ValueError(f"{args[0]} {args[1]} timed out. Check the remote before retrying.") from None
+    if run.returncode:
+        detail = re.sub(r"https?://[^\s/]+@", "https://[redacted]@", run.stderr.strip())
+        raise ValueError(detail or f"{args[0]} {args[1]} failed.")
+    return run.stdout.strip()
+
+
+def github_repository(remote: str) -> str:
+    match = re.fullmatch(
+        rf"(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)({REPOSITORY})/?",
+        remote,
+        re.IGNORECASE,
+    )
+    if not match:
+        raise ValueError("Set origin to a github.com HTTPS or SSH remote.")
+    repo = match[1].removesuffix(".git").lower()
+    if not re.fullmatch(REPOSITORY, repo) or repo.split("/")[1] in {".", ".."}:
+        raise ValueError("The origin repository name is invalid.")
+    return repo
+
+
+def origin_repository() -> str:
+    remotes = command("git", "remote", "get-url", "--all", "origin").splitlines()
+    push_remotes = command("git", "remote", "get-url", "--push", "--all", "origin").splitlines()
+    if len(remotes) != 1 or len(push_remotes) != 1:
+        raise ValueError("Origin must have one fetch URL and one push URL.")
+    repo = github_repository(remotes[0])
+    if github_repository(push_remotes[0]) != repo:
+        raise ValueError("Origin fetch and push URLs must point to the same GitHub repository.")
+    return repo
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def api(me: dict, method: str, path: str, body: dict | None = None, token: str = "") -> dict:
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-Contract-Token"] = token
+    url = me["server"].rstrip("/") + path
+    if token:
+        target = urllib.parse.urlsplit(url)
+        if target.scheme != "https" and target.hostname not in {"localhost", "127.0.0.1", "::1"}:
+            raise ValueError("Use HTTPS to link a room on a remote server.")
+    request = urllib.request.Request(
+        url, method=method, headers=headers,
+        data=json.dumps({"room": me["room"], **body}).encode() if body is not None else None,
+    )
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(request, timeout=15) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        raise ValueError(f"Team Contract request failed (HTTP {error.code}): {error.read().decode()[:300]}") from None
+    except urllib.error.URLError as error:
+        raise ValueError(f"Could not reach Team Contract: {error.reason}") from None
+
+
+def approval_token() -> str:
+    if not sys.stdin.isatty():
+        raise ValueError("Run this command in a terminal to enter the approval token.")
+    token = getpass.getpass("Team Contract approval token: ")
+    if not token:
+        raise ValueError("Enter the server approval token to link the room.")
+    return token
+
+
+def linked_repository(me: dict) -> dict | None:
+    query = urllib.parse.urlencode({"room": me["room"]})
+    return api(me, "GET", f"/git?{query}")["repository"]
+
+
+def link(me: dict, repo: str, token: str) -> None:
+    info = json.loads(command("gh", "repo", "view", repo, "--json", "defaultBranchRef"))
+    branch = info.get("defaultBranchRef")
+    if not branch:
+        raise ValueError("Create an initial commit on GitHub before linking this repository.")
+    base = branch["name"]
+    api(me, "PUT", "/git", {"repository": repo, "base_branch": base}, token)
+    print(f"Linked room {me['room']} to {repo} (base branch: {base}).")
+
+
+def create_repository(me: dict, repo: str) -> None:
+    if not re.fullmatch(REPOSITORY, repo) or repo.split("/")[1] in {".", ".."}:
+        raise ValueError("Give the new private repository as OWNER/REPO.")
+    if "origin" in command("git", "remote").splitlines():
+        raise ValueError("This checkout already has an origin. Use link for an existing repo.")
+    if linked_repository(me):
+        raise ValueError("This room already has a linked repository.")
+    branch = command("git", "branch", "--show-current")
+    if not branch:
+        raise ValueError("Switch to a named branch before creating a repository.")
+    command("git", "rev-parse", "--verify", "HEAD")
+    token = approval_token()
+    api(me, "GET", "/git/link-access", token=token)
+    command("gh", "repo", "create", repo, "--private", "--source", ".", "--remote", "origin", "--push")
+    print(f"Created private repository https://github.com/{repo}.", flush=True)
+    link(me, origin_repository(), token)
+
+
+def open_pr(repo: str, branch: str, base: str) -> dict | None:
+    if branch == base:
+        return None
+    matches = json.loads(command(
+        "gh", "pr", "list", "--repo", repo, "--head", branch, "--base", base,
+        "--state", "open", "--json", "number,url,isCrossRepository",
+    ))
+    return next((pr for pr in matches if not pr["isCrossRepository"]), None)
+
+
+def publish(repo: str, branch: str, base: str, ahead: int, title: str | None) -> dict:
+    if branch == base:
+        raise ValueError(f"Switch to a task branch before publishing. {base} is the review target.")
+    if ahead == 0:
+        raise ValueError(f"There are no commits on this branch to propose against {base}.")
+    existing = open_pr(repo, branch, base)
+    if command("git", "status", "--porcelain"):
+        print("Only committed changes will be pushed.", file=sys.stderr)
+    command(
+        "git", "push", "--no-follow-tags", "--recurse-submodules=no", "origin",
+        f"refs/heads/{branch}:refs/heads/{branch}",
+    )
+    print(f"Pushed {branch} to {repo}.", flush=True)
+    if existing:
+        return existing
+    title = title or command("git", "log", "-1", "--format=%s") or branch
+    try:
+        url = command(
+            "gh", "pr", "create", "--repo", repo, "--base", base, "--head", branch,
+            "--draft", "--title", title, "--body", "Task branch shared with Team Contract.",
+        )
+    except ValueError as error:
+        # Another publish may have created the PR between list and create.
+        existing = open_pr(repo, branch, base)
+        if existing:
+            return existing
+        raise ValueError(f"The branch is on GitHub. Retry publish to create its PR. {error}") from error
+    return {"number": int(url.rstrip("/").rsplit("/", 1)[1]), "url": url}
+
+
+def sync(me: dict, repo: str, action: str, title: str | None) -> None:
+    linked = linked_repository(me)
+    if not linked:
+        raise ValueError("The room has no repository. Ask the room owner to run git_sync.py link.")
+    if linked["repository"] != repo:
+        raise ValueError("Origin does not match the room's linked repository.")
+    base = linked["base_branch"]
+    command("git", "check-ref-format", f"refs/heads/{base}")
+    branch = command("git", "branch", "--show-current")
+    if not branch:
+        raise ValueError("Switch to a named branch before checking or publishing.")
+    if action == "publish" and branch == base:
+        raise ValueError(f"Switch to a task branch before publishing. {base} is the review target.")
+    command(
+        "git", "fetch", "--no-tags", "--no-recurse-submodules", "origin",
+        f"+refs/heads/{base}:refs/remotes/origin/{base}",
+    )
+    behind, ahead = map(int, command(
+        "git", "rev-list", "--left-right", "--count", f"refs/remotes/origin/{base}...HEAD",
+    ).split())
+    if action == "publish":
+        pr = publish(repo, branch, base, ahead, title)
+    else:
+        pr = open_pr(repo, branch, base)
+    print(f"{branch}: {ahead} ahead, {behind} behind origin/{base}.")
+    if pr:
+        print(f"Pull request: {pr['url']}")
+    try:
+        api(me, "POST", "/git/activity", {
+            "author": me["name"], "repository": repo, "base_branch": base,
+            "branch": branch, "ahead": ahead, "behind": behind,
+            "pr_number": pr["number"] if pr else None,
+        })
+    except ValueError as error:
+        raise ValueError(f"Dashboard status was not sent. Run status to retry. {error}") from error
+    print("Status sent to the Team Contract dashboard.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="action", required=True)
+    subparsers.add_parser("link", help="link this origin to the room (room owner)")
+    create_parser = subparsers.add_parser("create", help="create a private GitHub repo from committed local work and link it")
+    create_parser.add_argument("repository", metavar="OWNER/REPO")
+    subparsers.add_parser("status", help="fetch the base branch and report branch status")
+    publish_parser = subparsers.add_parser("publish", help="push committed work and open or reuse its PR")
+    publish_parser.add_argument("--title", help="title for a new draft PR")
+    args = parser.parse_args()
+    try:
+        me = json.loads((PROJECT / "coord/me.json").read_text())
+        if command("git", "rev-parse", "--show-toplevel") != str(PROJECT):
+            raise ValueError("Install Team Contract at the root of the Git repository.")
+        if args.action == "create":
+            create_repository(me, args.repository)
+        elif args.action == "link":
+            link(me, origin_repository(), approval_token())
+        else:
+            sync(me, origin_repository(), args.action, getattr(args, "title", None))
+    except (OSError, ValueError, KeyError) as error:
+        sys.exit(f"Stopped: {error}")
+
+
+if __name__ == "__main__":
+    main()

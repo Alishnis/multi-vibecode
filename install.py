@@ -30,6 +30,7 @@ SOURCE = Path(__file__).resolve().parent
 FILES_TO_COPY = [
     "coord/hooks/contract_hook.py",
     "coord/mcp/server.py",
+    "coord/git_sync.py",
     "coord/me.example.json",
 ]
 HOOK_MARKER = "coord/hooks/contract_hook.py"  # how we recognise our own hook
