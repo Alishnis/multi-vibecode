@@ -18,3 +18,7 @@ services:
     envVars:
       - key: OPENROUTER_API_KEY
         sync: false
+      # Optional server-wide password for approving decisions in any room.
+      # Each room can also set its own team key on the dashboard instead.
+      - key: CONTRACT_APPROVAL_TOKEN
+        sync: false

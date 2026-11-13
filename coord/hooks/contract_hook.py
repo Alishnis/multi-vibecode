@@ -7,22 +7,30 @@ script prints is added to what the agent sees, next to the prompt.
 It uses only Python's built-in libraries, so teammates install nothing.
 
 Rule: this script must never stop the user's prompt. If anything goes wrong
-(no me.json, server down), it prints nothing and exits with code 0. The reason
-is written to stderr, which Claude Code shows only in debug mode.
+(no me.json, server down), it exits with code 0. It then prints one short note
+for the agent, so the agent knows it is working without the contract instead
+of silently guessing. The technical reason goes to stderr, which Claude Code
+shows only in debug mode.
 """
 
 import json
 import sys
 import urllib.parse
-import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # the coord folder
+try:
+    from tc_http import urlopen
+except ImportError:  # an older install without coord/tc_http.py
+    from urllib.request import urlopen
 
 ME_FILE = Path(__file__).resolve().parent.parent / "me.json"  # coord/me.json
 TIMEOUT_SECONDS = 3
 
 
-def give_up(reason: str) -> None:
+def give_up(reason: str, note: str) -> None:
     print(f"contract hook skipped: {reason}", file=sys.stderr)
+    print(f"[Team Contract] {note}")
     sys.exit(0)
 
 
@@ -31,17 +39,33 @@ def main() -> None:
         me = json.loads(ME_FILE.read_text())
         room, server = me["room"], me["server"].rstrip("/")
     except FileNotFoundError:
-        give_up(f"{ME_FILE} not found (copy coord/me.example.json to coord/me.json)")
+        give_up(
+            f"{ME_FILE} not found",
+            "This project uses a shared team contract, but it is not set up on this "
+            "computer (coord/me.json is missing). Tell the user once that they can "
+            "join with the Team Contract installer; until then, teammates' decisions "
+            "are unknown.",
+        )
     except (json.JSONDecodeError, KeyError, AttributeError) as error:
-        give_up(f"{ME_FILE} is not valid: {error!r}")
+        give_up(
+            f"{ME_FILE} is not valid: {error!r}",
+            "The team contract could not be loaded because coord/me.json is not "
+            "valid. Tell the user to rerun the Team Contract installer.",
+        )
 
     query = {"room": room, "name": me.get("name", "")}  # the name marks this person as active
     url = f"{server}/contract?" + urllib.parse.urlencode(query)
     try:
-        with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as response:
+        with urlopen(url, timeout=TIMEOUT_SECONDS) as response:
             contract = json.load(response)
-    except Exception as error:  # server down, wrong address, bad reply
-        give_up(f"could not reach {url}: {error!r}")
+    except Exception as error:  # server down, still waking up, wrong address, bad reply
+        give_up(
+            f"could not reach {url}: {error!r}",
+            "The team contract could not be loaded for this prompt: the server did "
+            "not answer. Decisions made by teammates are unknown right now. Before "
+            "choosing a framework, database, API shape, field name or port, tell "
+            "the user that the contract is unavailable and ask whether to continue.",
+        )
 
     print(contract["text"])
     if contract["decisions"]:

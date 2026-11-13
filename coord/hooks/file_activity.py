@@ -10,7 +10,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "coord"))
-from git_sync import github_repository  # noqa: E402
 
 TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 ENDPOINTS = {"PreToolUse": "/files/check", "PostToolUse": "/files/edits"}
@@ -68,6 +67,11 @@ def run(event: dict) -> dict | None:
     path = edited_path(event)
     if not endpoint or not path:
         return None
+    # Imported here so that a missing helper file is reported like any other
+    # failure (a quiet note) instead of crashing the hook.
+    from git_sync import github_repository
+    from tc_http import urlopen
+
     me = json.loads((ROOT / "coord/me.json").read_text())
     remote = git("remote", "get-url", "origin")
     try:
@@ -82,7 +86,7 @@ def run(event: dict) -> dict | None:
         me["server"].rstrip("/") + endpoint, data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"}, method="POST",
     )
-    with urllib.request.urlopen(request, timeout=2) as response:
+    with urlopen(request, timeout=2) as response:
         result = json.load(response)
     if event["hook_event_name"] == "PreToolUse" and result["edits"]:
         warning = message(path, result["edits"])
@@ -98,5 +102,5 @@ if __name__ == "__main__":
         output = run(json.load(sys.stdin))
         if output:
             print(json.dumps(output))
-    except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, ImportError) as error:
         print(f"Team Contract file check unavailable ({type(error).__name__}).", file=sys.stderr)

@@ -14,6 +14,9 @@ import urllib.request
 from pathlib import Path
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # the coord folder
+from tc_http import urlopen  # noqa: E402
+
 PROJECT = Path(__file__).resolve().parent.parent
 REPOSITORY = r"[a-zA-Z0-9][a-zA-Z0-9-]{0,38}/[a-zA-Z0-9_.-]{1,100}"
 
@@ -76,7 +79,7 @@ def api(me: dict, method: str, path: str, body: dict | None = None, token: str =
         data=json.dumps({"room": me["room"], **body}).encode() if body is not None else None,
     )
     try:
-        with urllib.request.build_opener(NoRedirect()).open(request, timeout=15) as response:
+        with urlopen(request, timeout=15, handlers=(NoRedirect(),)) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
         raise ValueError(f"Team Contract request failed (HTTP {error.code}): {error.read().decode()[:300]}") from None

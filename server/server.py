@@ -13,20 +13,22 @@ import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, ValidationError, field_validator
 
 PROJECT_ROOT = Path(__file__).parent.parent
-DB_PATH = Path(__file__).parent / "contract.db"
 DASHBOARD_PATH = Path(__file__).parent / "dashboard.html"
 
 log = logging.getLogger("uvicorn.error")
 
 Category = Literal["stack", "api", "data", "convention", "other"]
 FILE_ACTIVITY_MINUTES = 30
+# Claude Code drops hook output above 10,000 characters. The contract text is
+# kept well below that, so the hook's own instructions still fit.
+CONTRACT_TEXT_BUDGET = 7000
 
 
 def load_env_file() -> None:
@@ -45,6 +47,10 @@ def load_env_file() -> None:
 
 
 load_env_file()
+
+# Where the database file lives. Set CONTRACT_DB_PATH to a folder that survives
+# restarts (for example a persistent disk on the hosting service).
+DB_PATH = Path(os.environ.get("CONTRACT_DB_PATH") or Path(__file__).parent / "contract.db")
 
 from . import conflicts  # noqa: E402  (imported after .env is loaded)
 
@@ -209,25 +215,59 @@ def load_people(room: str) -> list[dict]:
     ]
 
 
-def contract_as_text(decisions: list[dict]) -> str:
-    """The contract as plain lines, ready for a hook to print into an agent's context."""
+def contract_as_text(decisions: list[dict], budget: int = CONTRACT_TEXT_BUDGET) -> str:
+    """The contract as plain lines, ready for a hook to print into an agent's context.
+
+    The text never grows past `budget` characters. If the contract is too long,
+    the newest decisions are left out and the agent is told how many.
+    """
     if not decisions:
         return "The team contract is empty. No decisions have been recorded yet."
     lines = ["Team contract (decisions already made by the team):"]
-    for d in decisions:
-        lines.append(f"- [{d['category']}] {d['text']} (by {d['author']})")
+    used = len(lines[0])
+    for position, d in enumerate(decisions):
+        line = f"- [{d['category']}] {d['text']} (by {d['author']})"
+        if used + len(line) + 1 > budget:
+            hidden = len(decisions) - position
+            lines.append(
+                f"({hidden} newer decision(s) are not shown because the contract is too "
+                "long. Tell the user to retire old decisions on the team dashboard. "
+                "record_decision still checks against every decision.)"
+            )
+            break
+        lines.append(line)
+        used += len(line) + 1
     return "\n".join(lines)
 
 
+def clean_line(value):
+    """Turn text into one clean line.
+
+    Decisions are printed into every teammate's agent as "- [category] text".
+    Without this, a line break inside one decision would look like a second,
+    forged decision. So every run of spaces and line breaks becomes one space.
+    """
+    if not isinstance(value, str):
+        return value
+    value = " ".join(value.split())
+    if not value.isprintable():
+        raise ValueError("Use plain text without control characters")
+    return value
+
+
+Line = Annotated[str, BeforeValidator(clean_line)]
+RoomParam = Annotated[str, BeforeValidator(clean_line), Query(min_length=1, max_length=50)]
+NameParam = Annotated[str | None, BeforeValidator(clean_line), Query(max_length=50)]
+
+
 class RoomAuthor(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-    room: str = Field(min_length=1, max_length=50)
-    author: str = Field(min_length=1, max_length=50)
+    room: Line = Field(min_length=1, max_length=50)
+    author: Line = Field(min_length=1, max_length=50)
 
 
 class NewDecision(RoomAuthor):
     category: Category
-    text: str = Field(min_length=1, max_length=500)
+    text: Line = Field(min_length=1, max_length=500)
 
 
 class NewPlan(RoomAuthor):
@@ -237,24 +277,24 @@ class NewPlan(RoomAuthor):
 class NewRequest(RoomAuthor):
     topic: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$")
     category: Category
-    question: str = Field(min_length=1, max_length=240)
+    question: Line = Field(min_length=1, max_length=240)
     options: list[str] = Field(max_length=4)
 
     @field_validator("options")
     @classmethod
     def clean_options(cls, options: list[str]) -> list[str]:
-        clean = list(dict.fromkeys(option.strip() for option in options))
+        clean = list(dict.fromkeys(clean_line(option) for option in options))
         if any(not option or len(option) > 500 for option in clean):
             raise ValueError("Each option must be 1 to 500 characters")
         return clean
 
 
 class RequestAnswer(RoomAuthor):
-    text: str = Field(min_length=1, max_length=500)
+    text: Line = Field(min_length=1, max_length=500)
 
 
 class RoomRepository(BaseModel):
-    room: str = Field(min_length=1, max_length=50)
+    room: Line = Field(min_length=1, max_length=50)
     repository: str = Field(max_length=141, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}/[a-zA-Z0-9_.-]{1,100}$")
     base_branch: str = Field(min_length=1, max_length=250)
 
@@ -395,6 +435,7 @@ def add_decision(decision: NewDecision) -> dict:
 
 @app.post("/plans/check")
 def review_plan(plan: NewPlan) -> dict:
+    touch_person(plan.room, plan.author)
     existing, requests = load_contract(plan.room)
     try:
         review = conflicts.check_plan(plan.plan, existing, requests)
@@ -430,6 +471,7 @@ def review_plan(plan: NewPlan) -> dict:
 
 @app.post("/decision-requests")
 def open_request(request: NewRequest) -> dict:
+    touch_person(request.room, request.author)
     with connect() as conn:
         cursor = conn.execute(
             """
@@ -490,7 +532,7 @@ def answer_request(request_id: int, answer: RequestAnswer, x_contract_token: str
 
 
 @app.get("/contract")
-def get_contract(room: str, name: str | None = None) -> dict:
+def get_contract(room: RoomParam, name: NameParam = None) -> dict:
     """The contract for one room: as a list, and as ready-to-print text.
 
     The hook passes the person's name, which marks them as active.
@@ -507,7 +549,7 @@ def get_contract(room: str, name: str | None = None) -> dict:
 
 
 @app.get("/state")
-def get_state(room: str) -> dict:
+def get_state(room: RoomParam) -> dict:
     """Everything the dashboard shows."""
     decisions, requests = load_contract(room)
     with connect() as conn:
@@ -536,7 +578,7 @@ def get_state(room: str) -> dict:
 
 
 @app.get("/git")
-def get_repository(room: str) -> dict:
+def get_repository(room: RoomParam) -> dict:
     with connect() as conn:
         return {"repository": room_repository(conn, room)}
 
@@ -589,12 +631,16 @@ def report_git_activity(activity: GitActivity) -> dict:
 
 
 @app.post("/reset")
-def reset_room(room: str, x_contract_token: str | None = Header(None)) -> dict:
-    """Empty a room. Require the approval token on servers that configure it."""
+def reset_room(room: RoomParam, x_contract_token: str | None = Header(None)) -> dict:
+    """Empty a room, including its GitHub link, so the room can be reused.
+
+    Requires the approval token on servers that configure it.
+    """
     if os.environ.get("CONTRACT_APPROVAL_TOKEN"):
         require_approval_token(x_contract_token)
     with connect() as conn:
-        for table in ("decisions", "conflicts", "people", "decision_requests", "git_activity", "file_edits"):
+        for table in ("decisions", "conflicts", "people", "decision_requests",
+                      "git_activity", "file_edits", "room_repositories"):
             conn.execute(f"DELETE FROM {table} WHERE room = ?", (room,))
     return {"room": room, "reset": True}
 

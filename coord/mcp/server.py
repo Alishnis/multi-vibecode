@@ -16,8 +16,14 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # the coord folder
+try:
+    from tc_http import urlopen
+except ImportError:  # an older install without coord/tc_http.py
+    from urllib.request import urlopen
+
 ME_FILE = Path(__file__).resolve().parent.parent / "me.json"  # coord/me.json
-TIMEOUT_SECONDS = 30  # generous: slice 4 adds an AI conflict check on the server
+TIMEOUT_SECONDS = 30  # generous: the server asks an AI model to check each decision
 CATEGORIES = ["stack", "api", "data", "convention", "other"]
 
 INSTRUCTIONS = (
@@ -116,6 +122,10 @@ def log(message: str) -> None:
     print(f"team-contract: {message}", file=sys.stderr, flush=True)
 
 
+class ContractChanged(ValueError):
+    """A teammate changed the contract while the server was checking. Safe to retry."""
+
+
 def post(path: str, arguments: dict) -> dict:
     try:
         me = json.loads(ME_FILE.read_text())
@@ -131,10 +141,12 @@ def post(path: str, arguments: dict) -> dict:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
         detail = error.read().decode(errors="replace")[:300]
+        if error.code == 409 and "changed during the check" in detail:
+            raise ContractChanged(detail) from error
         raise ValueError(f"The server rejected the request ({error.code}): {detail}") from error
     except Exception as error:
         raise ValueError(f"Could not reach the team contract server at {server} ({error!r}).") from error
@@ -142,7 +154,13 @@ def post(path: str, arguments: dict) -> dict:
 
 def record_decision(arguments: dict) -> str:
     text = str(arguments.get("text", "")).strip()
-    reply = post("/decisions", {"category": arguments.get("category"), "text": text})
+    body = {"category": arguments.get("category"), "text": text}
+    try:
+        reply = post("/decisions", body)
+    except ContractChanged:
+        # Two agents recorded at the same moment. The second try is checked
+        # against the contract that now includes the teammate's decision.
+        reply = post("/decisions", body)
 
     conflict = reply.get("conflict")
     if conflict:

@@ -16,6 +16,9 @@ root, which the server loads into the environment:
 
 import json
 import os
+import threading
+import time
+from collections import deque
 from typing import Literal, TypeVar
 
 import httpx
@@ -24,6 +27,24 @@ from pydantic import BaseModel, Field
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "anthropic/claude-haiku-5.5"
 TIMEOUT_SECONDS = 20  # an agent is waiting for the answer
+
+# The server is open to anyone who knows its address, and every check costs
+# money. This caps how many checks the whole server runs per minute.
+MAX_CHECKS_PER_MINUTE = int(os.environ.get("CONTRACT_MAX_CHECKS_PER_MINUTE", "60"))
+_recent_checks: deque[float] = deque()
+_recent_checks_lock = threading.Lock()
+
+
+def _take_check_slot() -> bool:
+    """True if one more model call is allowed right now."""
+    current = time.monotonic()
+    with _recent_checks_lock:
+        while _recent_checks and current - _recent_checks[0] > 60:
+            _recent_checks.popleft()
+        if len(_recent_checks) >= MAX_CHECKS_PER_MINUTE:
+            return False
+        _recent_checks.append(current)
+        return True
 
 SYSTEM_PROMPT = """\
 You check decisions for a software team. Each teammate works with their own AI \
@@ -162,6 +183,8 @@ def check_plan(plan: str, existing: list[dict], requests: list[dict]) -> PlanRev
 def structured_check(prompt: str, question: str, name: str, schema: dict, result: type[T]) -> T:
     if not is_configured():
         raise CheckerUnavailable("no OPENROUTER_API_KEY in .env")
+    if not _take_check_slot():
+        raise CheckerUnavailable("too many checks this minute, try again shortly")
     body = {
         "model": model_name(),
         "max_tokens": 4000,

@@ -23,11 +23,14 @@ import json
 import shutil
 import sys
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parent
+sys.path.insert(0, str(SOURCE / "coord"))
+from tc_http import urlopen  # noqa: E402  (HTTPS that also works on Macs without certificates)
+
 FILES_TO_COPY = [
+    "coord/tc_http.py",
     "coord/hooks/contract_hook.py",
     "coord/hooks/file_activity.py",
     "coord/mcp/server.py",
@@ -152,12 +155,13 @@ def update_gitignore(target: Path) -> None:
 def check_server(me: dict) -> None:
     query = urllib.parse.urlencode({"room": me["room"]})
     try:
-        with urllib.request.urlopen(f"{me['server']}/contract?{query}", timeout=5) as response:
+        with urlopen(f"{me['server']}/contract?{query}", timeout=30) as response:
             count = len(json.load(response)["decisions"])
         print(f"  server reached: room {me['room']} has {count} decision(s)")
     except Exception as error:
         print(f"  WARNING: could not reach {me['server']} ({type(error).__name__}).")
         print("  The files are installed. Check the address, or start the server, then try a prompt.")
+        print("  A free hosted server sleeps when idle: open its address in a browser to wake it.")
 
 
 def main() -> None:
