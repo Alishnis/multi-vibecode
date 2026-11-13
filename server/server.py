@@ -619,6 +619,16 @@ class NewMessage(RoomAuthor):
     to: Annotated[str | None, BeforeValidator(teammate_name), Field(max_length=50)] = None
 
 
+def known_teammate(conn: sqlite3.Connection, room: str, name: str) -> str | None:
+    """The teammate's name as their own computer reports it, matched without regard to case.
+
+    People type "mei" or "Mei" for the same person. Messages and requests are
+    stored under the real name, so they are delivered to the right agent.
+    """
+    row = conn.execute("SELECT name FROM people WHERE room = ? AND name = ? COLLATE NOCASE", (room, name)).fetchone()
+    return row["name"] if row else None
+
+
 def load_messages(conn: sqlite3.Connection, room: str, limit: int = 30) -> list[dict]:
     """The newest messages of a room, oldest first."""
     rows = conn.execute(
@@ -746,8 +756,9 @@ def asks_as_text(conn: sqlite3.Connection, room: str, name: str | None, room_lef
         "short result. If the user says no, call answer_ask with action decline.",
         [ask_line(a) for a in waiting], room_left, "(+{n} more requests on the dashboard)")
     out += fit_section(
-        "Approved by you on the dashboard: run these now, within the limits shown, then call answer_ask "
-        "with action done and a short result.",
+        "Approved by you on the dashboard: the user already approved these with the team key, so do not "
+        "ask again. Run them now, within the limits shown, then call answer_ask with action done and a "
+        "short result.",
         [ask_line(a) for a in approved], room_left - len(out), "(+{n} more approved requests on the dashboard)")
     lines = []
     for a in answered:
@@ -1599,12 +1610,12 @@ def send_message(message: NewMessage) -> dict:
     # create an "active teammate". Agents become active through their own prompts and edits.
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        recipient = None
         if message.to:
-            if message.to == message.author:
+            if message.to.lower() == message.author.lower():
                 raise HTTPException(422, "A message to yourself reaches nobody.")
-            known = conn.execute("SELECT 1 FROM people WHERE room = ? AND name = ?",
-                                 (message.room, message.to)).fetchone()
-            if not known:
+            recipient = known_teammate(conn, message.room, message.to)
+            if not recipient:
                 raise HTTPException(404, f"No teammate called {message.to} has connected to this room yet.")
         minute_ago = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(timespec="seconds")
         recent = conn.execute("SELECT COUNT(*) FROM messages WHERE room = ? AND author = ? AND created_at > ?",
@@ -1613,14 +1624,14 @@ def send_message(message: NewMessage) -> dict:
             raise HTTPException(429, "Too many messages this minute. Wait a moment.")
         cursor = conn.execute(
             "INSERT INTO messages (room, author, recipient, text, created_at) VALUES (?, ?, ?, ?, ?)",
-            (message.room, message.author, message.to, message.text, now()),
+            (message.room, message.author, recipient, message.text, now()),
         )
         conn.execute(
             "DELETE FROM messages WHERE room = ? AND id <= "
             "(SELECT id FROM messages WHERE room = ? ORDER BY id DESC LIMIT 1 OFFSET ?)",
             (message.room, message.room, MESSAGE_KEEP),
         )
-    return {"id": cursor.lastrowid, "to": message.to}
+    return {"id": cursor.lastrowid, "to": recipient}
 
 
 @app.post("/asks")
@@ -1632,11 +1643,12 @@ def create_ask(ask: NewAsk) -> dict:
     """
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        if ask.to == ask.author:
+        if ask.to.lower() == ask.author.lower():
             raise HTTPException(422, "Ask a teammate, not yourself.")
-        known = conn.execute("SELECT 1 FROM people WHERE room = ? AND name = ?", (ask.room, ask.to)).fetchone()
-        if not known:
+        target = known_teammate(conn, ask.room, ask.to)
+        if not target:
             raise HTTPException(404, f"No teammate called {ask.to} has connected to this room yet.")
+        ask.to = target
         current = now()
         open_by = lambda column, who: conn.execute(
             f"SELECT COUNT(*) FROM asks WHERE room = ? AND {column} = ? AND status = 'pending' AND expires_at > ?",
@@ -1676,7 +1688,7 @@ def answer_ask(ask_id: int, answer: AskAnswer, x_contract_token: str | None = He
         status = ask_dict(row)["status"]
         owner, allowed = (row["from_name"], {"pending"}) if answer.action == "cancel" else (
             row["to_name"], {"pending"} if answer.action != "done" else {"pending", "approved"})
-        if answer.author != owner:
+        if answer.author.lower() != owner.lower():
             raise HTTPException(403, f"Only {owner} can do that to this request.")
         if status not in allowed:
             raise HTTPException(409, f"This request is {status}.")

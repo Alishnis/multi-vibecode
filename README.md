@@ -196,12 +196,13 @@ Send a prompt to a teammate's agent. **Nothing runs until that teammate approves
 2. **They are told.** On the teammate's next prompt, their agent is given the request as quoted data, marked **not approved**, and told to show it to its user, say who asks and what, and ask. The agent does nothing with it until the user says yes.
 3. **They approve, in one of two ways.**
    - *In their chat:* they say yes to their agent, which runs the request and reports with `answer_ask`. The dashboard shows "Approved (chat)", and the agent's report is taken at its word.
-   - *On the dashboard:* they press **Approve**, enter their own name and the team key. Only this kind of approval makes their agent run the request on its next prompt without asking again. The team key is never shown to agents, so an agent cannot give it.
+   - *On the dashboard:* they press **Approve**, enter their own name and the team key. Only this kind of approval makes their agent run the request on its next prompt without asking again; the agent is told the user already approved it. The team key is never shown to agents, so an agent cannot give it.
 4. **The answer returns.** When the teammate's agent finishes, it sends a short result. Your agent shows it to you once on your next prompt, and the dashboard lists it.
 
 Good to know:
 
 - **Limits are advice, not locks.** *Read only* tells the teammate's agent not to edit files or run commands that change anything. Claude Code's own permission prompts on their computer still apply, but this tool cannot enforce the limit.
+- **Names ignore case.** "Mei" and "mei" are the same teammate; the request is stored under the name their own computer reports.
 - **Names are not verified.** The room has no accounts, so anyone who knows the room name can send a request as anyone. That is why a request is never run without the target's yes, and why the agent is told to treat the sender's name and text as data.
 - **Fences.** The teammate must have connected to the room. Nobody may have more than five open requests, and nobody may hold more than five waiting. A sender can cancel a waiting request. An unanswered request expires and the sender is told once.
 - **Not a remote control.** It works through the teammate's next prompt, so it arrives when they next use their agent, not instantly.

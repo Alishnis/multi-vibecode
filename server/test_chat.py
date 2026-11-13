@@ -49,6 +49,7 @@ class ChatTest(unittest.TestCase):
         self.assertEqual(self.say("Ali", "@Mei can you review my PR?", to="@Mei").json()["to"], "Mei")
         self.assertIn('Ali (to you): "@Mei can you review my PR?"', self.prompt("Mei"))
         self.assertNotIn("review my PR", self.prompt("Dana"))
+        self.assertEqual(self.say("Ali", "hello again", to="mEI").json()["to"], "Mei")   # case does not matter
         self.assertEqual(self.say("Ali", "hi", to="Nobody").status_code, 404)
         self.assertEqual(self.say("Ali", "hi", to="Ali").status_code, 422)
 
