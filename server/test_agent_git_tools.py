@@ -64,7 +64,7 @@ class AgentGitToolsTest(unittest.TestCase):
     def test_tool_list_and_instructions_describe_the_git_tools(self):
         listed = tools.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]
         names = [tool["name"] for tool in listed]
-        self.assertEqual(names[3:], ["start_task", "share_work", "get_latest", "branch_status"])
+        self.assertEqual(names[3:7], ["start_task", "share_work", "get_latest", "branch_status"])
         self.assertIn("Use them only when the user asks", tools.INSTRUCTIONS)
         # People keep the team key, so linking a room is not offered to agents.
         self.assertFalse({"link", "create", "link_repository"} & set(names))

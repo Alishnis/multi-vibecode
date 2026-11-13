@@ -56,7 +56,7 @@ The hosted flow has been tested with two independent sessions on one Mac. Setup 
 
 ## Run your own server
 
-Copy `.env.example` to `.env` and put your OpenRouter API key there to enable conflict checking. Start the server with `sh start_server.sh`, then use `http://127.0.0.1:8000` as the installer URL for both sessions. Keep the server terminal open during the test.
+Copy `.env.example` to `.env` and put your OpenRouter API key there to enable conflict checking. Optionally add a free Gemini key (`GEMINI_API_KEY`): it runs the small jobs, such as one-sentence edit summaries, so they cost nothing. With only a Gemini key, the conflict checks use Gemini too. Start the server with `sh start_server.sh`, then use `http://127.0.0.1:8000` as the installer URL for both sessions. Keep the server terminal open during the test.
 
 The hosted prototype has no accounts. Anyone who knows the room code can read the room and propose decisions. Changing the contract by hand (answering, settling, retiring, resetting) needs the room's team key, described below. Use a fresh room with sample decisions when testing, and pick a room code that is hard to guess.
 
@@ -145,6 +145,18 @@ Use `python3 coord/git_sync.py watch --once` for a single check and sync, or add
 
 By default the watcher applies only pull requests that someone approved. Many small teams merge without a formal approval, and GitHub does not let you approve your own pull request. In that case the watcher tells you that newer commits were left alone. Run `python3 coord/git_sync.py watch --any-merge` to apply every merged pull request, approved or not. Commits pushed straight to the shared branch are never applied; use `git pull` for those. New files that Git does not track yet do not block a sync. Unsaved edits to tracked files do, and the notice names them.
 
+## Claim work before editing
+
+A claim says what a teammate is about to change, before any edit. It is the one moment another agent can still pick different work.
+
+- **How it is made.** Claude calls the `claim_work` tool before the first edit of a task, with the task in one sentence and the files or folders it expects to change. You can also say "claim `server/` for the login work". A folder covers everything inside it.
+- **Who sees it.** Every teammate's agent gets live claims in its context on each prompt. The dashboard lists them under **Claimed work**. A teammate's first edit of a claimed file shows **CLAIMED BY A TEAMMATE** and pauses, once per file.
+- **Overlap.** If two claims cover the same files, `claim_work` replies with **OVERLAP** and names the teammate, the task and the shared files. Claude then tells you before editing.
+- **How it ends.** A claim runs out after 120 minutes (5 to 480 can be asked for). Say "release my claim" to end it early (`release_claim`). `list_claims` shows what is claimed.
+- **Until the branch merges.** For longer work, say "claim it until merged". In a room linked to GitHub, on a task branch, the claim then stays until that branch's pull request is merged, at most 7 days. One person holds one such claim per branch; claiming again adds files to it. The room hears about a merge when any teammate runs `get_latest` or `python3 coord/git_sync.py watch`.
+
+A claim is a notice, never a lock. The server refuses no edit because of one. The idea follows the published AgentMash protocol; the code is our own.
+
 ## Get file overlap warnings
 
 Rerun the installer and restart Claude Code in each teammate's project. Use the same room with distinct names. In a linked room, both checkouts must point to the room's GitHub repository.
@@ -158,9 +170,12 @@ When Claude Code successfully edits a file using Edit, Write, MultiEdit, or Note
 | File path | `src/todos.py` | Relative to the project folder. |
 | Teammate and branch | Ali, `ali/todo-delete` | |
 | Session | `f7cfb68784229f55` | An opaque id for the Claude Code session. Not the real session id. |
-| Change summary | `+5/-1 lines, touching count_todos` | Line counts and the names the edit introduced. Never code. |
+| Change summary | `+5/-1 lines, touching count_todos` | Line counts and the names the edit introduced. Worked out on your computer. |
+| Changed lines | the removed and added lines, at most 4,000 characters | Only for the AI summary below. The server uses them once and does not store them. |
 | Checkout id | `9a41…` | Says whether two edits were made in the same folder. Made with a random key that stays on your computer, so it names neither the computer nor the folder. |
 | File fingerprint | `c03e…` | A hash of the file after the edit. Lets a teammate's computer tell whether it has exactly that version. |
+
+**AI summary.** If the server has a Gemini key, its free small model turns the changed lines into one sentence, for example `Adds delete_todo to remove a todo by its id. (+10/-2 lines)`. That replaces the counts-and-names summary a few seconds after the edit. Paid checker tokens are never spent on this: without a Gemini key the local summary stays. To keep your changed lines on your computer, add `"ai_summary": false` to `coord/me.json`. Files that usually hold secrets (`.env`, key files) are never sent. Note that a free Gemini tier may use what it receives to improve Google's models.
 
 The dashboard shows the summary next to each recent edit. When this session reads a file, the time is noted on your computer only (`coord/.state/`, kept out of Git).
 

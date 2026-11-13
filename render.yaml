@@ -18,6 +18,9 @@ services:
     envVars:
       - key: OPENROUTER_API_KEY
         sync: false
+      # Optional free Gemini key for small jobs (one-sentence edit summaries).
+      - key: GEMINI_API_KEY
+        sync: false
       # Optional server-wide password for approving decisions in any room.
       # Each room can also set its own team key on the dashboard instead.
       - key: CONTRACT_APPROVAL_TOKEN

@@ -26,6 +26,7 @@ class TerminalWarningsTest(unittest.TestCase):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.enterContext(patch.object(server, "DB_PATH", self.root / "test.db"))
         self.enterContext(patch.dict(os.environ, {"CONTRACT_APPROVAL_TOKEN": "test"}))
+        self.enterContext(patch.object(server.conflicts, "small_configured", return_value=False))  # no AI calls
         server.create_tables()
         client = self.enterContext(TestClient(server.app))
         self.reply = None
@@ -190,7 +191,7 @@ class TerminalWarningsTest(unittest.TestCase):
             conn.execute("UPDATE file_edits SET edited_at = ? WHERE author = ?", (then, author))
             conn.execute("UPDATE people SET last_seen = ? WHERE name = ?", (then, author))
 
-    def test_edit_report_carries_session_checkout_and_a_summary_without_code(self):
+    def test_edit_report_carries_session_checkout_and_a_summary(self):
         self.write("Ali", "def list_todos():\n    return SECRET_TOKEN\n")
         self.hook("Ali", "PostToolUse", tool="Edit", tool_input={
             "file_path": "src/todos.py", "old_string": "pass",
@@ -203,13 +204,54 @@ class TerminalWarningsTest(unittest.TestCase):
         for field in ("session", "checkout_id", "content_hash"):
             self.assertRegex(sent[field], r"^[0-9a-f]{16,32}$")
         self.assertNotIn("Ali-session", json.dumps(sent))      # the real session id stays local
-        self.assertNotIn("SECRET_TOKEN", json.dumps(sent))     # and so does the code
-        self.assertNotIn(str(self.root), json.dumps(sent))     # and the folder
-        edit = self.enterContext(TestClient(server.app)).get("/state?room=terminal-test").json()["files"]["edits"][0]
+        self.assertNotIn(str(self.root), json.dumps(sent))     # and so does the folder
+        # The changed lines go along for the one-sentence AI summary. The server does not keep them.
+        self.assertEqual(sent["change"], "-pass\n+def list_todos():\n+    return SECRET_TOKEN")
+        state = self.enterContext(TestClient(server.app)).get("/state?room=terminal-test")
+        self.assertNotIn("SECRET_TOKEN", state.text)
+        self.assertNotIn(b"SECRET_TOKEN", (self.root / "test.db").read_bytes())
+        edit = state.json()["files"]["edits"][0]
         self.assertEqual((edit["summary"], edit["tool"]), ("+2/-1 lines, touching list_todos", "Edit"))
         warning = self.hook("Mei")
         self.assertIn("Ali edited this file (just now): +2/-1 lines, touching list_todos.", warning["systemMessage"])
         self.assertIn("touching list_todos", warning["hookSpecificOutput"]["additionalContext"])
+
+    def test_changed_lines_stay_home_when_switched_off_or_the_file_holds_secrets(self):
+        edit = {"old_string": "A=1", "new_string": "A=SECRET_TOKEN"}
+        self.hook("Ali", "PostToolUse", tool_input={"file_path": ".env.local", **edit})
+        self.assertIsNone(self.requests[-1][1]["change"])
+        self.configure("Ali", ai_summary=False)
+        self.hook("Ali", "PostToolUse", tool_input={"file_path": "src/todos.py", **edit})
+        self.assertNotIn("change", self.requests[-1][1])
+        self.assertNotIn("SECRET_TOKEN", json.dumps(self.requests))
+
+    def test_a_claim_pauses_a_teammates_first_edit_of_the_file_only(self):
+        client = self.enterContext(TestClient(server.app))
+        claim = {"room": "terminal-test", "author": "Ali", "task": "Add delete\nfor todos", "paths": ["src/"]}
+        self.assertEqual(client.post("/claims", json=claim).status_code, 200)
+        self.assertIsNone(self.hook("Ali"))                           # my own claim says nothing to me
+        self.assertIsNone(self.hook("Mei", path="docs/readme.md"))    # outside the claimed folder
+        warning = self.hook("Mei")
+        self.assertIn("[Team Contract: CLAIMED BY A TEAMMATE]", warning["systemMessage"])
+        self.assertIn('Ali claimed this for "Add delete for todos" (119 min left).', warning["systemMessage"])
+        self.assertIn("not a lock", warning["systemMessage"])
+        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "ask")
+        self.assertIn('"task": "Add delete for todos"', warning["hookSpecificOutput"]["additionalContext"])
+        self.hook("Mei", "PostToolUse")                               # Mei went ahead
+        self.assertIsNone(self.hook("Mei"))                           # so she is not asked again
+        # Once Ali edits, the stronger notice takes over.
+        from datetime import timedelta
+        ago = lambda minutes: (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat(timespec="seconds")
+        with server.connect() as conn:                                # times are kept to the second
+            conn.execute("UPDATE claims SET created_at = ?", (ago(2),))
+            conn.execute("UPDATE file_edits SET edited_at = ? WHERE author = 'Mei'", (ago(1),))
+        self.hook("Ali", "PostToolUse")
+        both = self.hook("Mei")["systemMessage"]
+        self.assertIn("[Team Contract: ACTIVE COLLISION]", both)
+        self.assertNotIn("claimed this", both)                        # the claim was already acknowledged
+        self.configure("Mei", overlap="note")
+        client.post("/claims/release", json={"room": "terminal-test", "author": "Ali"})
+        self.assertIsNone(self.hook("Mei", path="src/new.py"))        # released: nothing to say
 
     def test_active_collision_becomes_work_in_another_checkout_when_the_teammate_stops(self):
         self.write("Ali", "v2 from Ali\n")

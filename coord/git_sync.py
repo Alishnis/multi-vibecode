@@ -411,6 +411,22 @@ def approved_requests(repo: str, base: str) -> dict[int, str]:
     }
 
 
+def report_merged_branches(me: dict, repo: str, base: str) -> None:
+    """Tell the room which task branches were merged, so "until merged" claims on them end. Best effort."""
+    try:
+        merged = pull_requests(repo, base, "merged", "headRefName,mergedAt")
+        newest: dict[str, str] = {}  # a branch name can be merged more than once
+        for pr in merged:
+            if pr.get("headRefName") and pr.get("mergedAt"):
+                newest[pr["headRefName"]] = max(pr["mergedAt"], newest.get(pr["headRefName"], ""))
+        if newest:
+            api(me, "POST", "/claims/merged", {"author": me["name"], "branches": [
+                {"branch": branch, "merged_at": merged_at} for branch, merged_at in list(newest.items())[:50]
+            ]})
+    except (OSError, ValueError, KeyError, TypeError):
+        pass  # claims also run out by themselves
+
+
 def merged_update(repo: str, base: str, ref: str, any_merge: bool = False) -> tuple[str, list[int]] | None:
     # Match GitHub's merge commits to the fetched branch history. An open PR
     # or an unrelated remote tip is not a pull target. By default only pull
@@ -508,6 +524,7 @@ def watch(me: dict, interval: int, notify_only: bool, once: bool = False, any_me
                        f"https://github.com/{repo}/pull/{number}")
             approvals = current
             ref = fetch_base(base)
+            report_merged_branches(me, repo, base)
             update = merged_update(repo, base, ref, any_merge)
             status = ""
             applied = False

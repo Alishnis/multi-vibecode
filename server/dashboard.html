@@ -395,6 +395,11 @@
     </section>
    </div>
    <div class="column">
+    <section class="panel" id="claim-panel">
+      <h2>Claimed work</h2>
+      <p class="meta">What teammates said they are about to change. A notice, not a lock.</p>
+      <ul id="claims"></ul>
+    </section>
     <section class="panel" id="file-panel">
       <h2>Recent file edits</h2>
       <p class="meta" id="file-window"></p>
@@ -979,6 +984,29 @@
     if (!git.activity.length) rows.append(el("li", "empty", "Published work will appear here when a teammate shares it."));
   }
 
+  function renderClaims(claims) {
+    const list = $("claims");
+    list.replaceChildren();
+    for (const claim of claims || []) {
+      const row = el("li", "file-row");
+      row.append(el("strong", null, claim.task));
+      const span = claim.until_merged
+        ? `until ${claim.branch} merges`
+        : `${claim.minutes_left} min left`;
+      const meta = el("div", "meta", `${claim.author} · ${span} · claimed `);
+      meta.append(timeSpan(claim.created_at));
+      row.append(meta);
+      const paths = el("div", "meta");
+      claim.paths.forEach((path, index) => {
+        if (index) paths.append(document.createTextNode(" "));
+        paths.append(el("code", null, path));
+      });
+      row.append(paths);
+      list.append(row);
+    }
+    if (!(claims || []).length) list.append(el("li", "empty", "Nothing is claimed. Agents claim files before a task; you can also ask Claude to “claim” them."));
+  }
+
   function renderFiles(files) {
     const list = $("file-edits");
     list.replaceChildren();
@@ -999,7 +1027,8 @@
         const author = edit.branch ? `${edit.author} · ${edit.branch}` : edit.author;
         const meta = el("div", "meta", `${author} · `);
         meta.append(timeSpan(edit.edited_at));
-        // What the edit did, as the teammate's computer summarised it: counts and names, no code.
+        // What the edit did: one sentence from the small AI model when the server has one,
+        // otherwise the counts and names the teammate's computer worked out.
         if (edit.summary) meta.append(document.createTextNode(` · ${edit.summary}`));
         row.append(meta);
       }
@@ -1033,6 +1062,7 @@
       renderLists(state);
       renderRequests(state);
       renderFiles(state.files);
+      renderClaims(state.claims);
     }
     const gitSignature = JSON.stringify(state.git ?? null);
     if ($("git-panel").dataset.signature !== gitSignature) {

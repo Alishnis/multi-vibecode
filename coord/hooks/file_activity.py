@@ -4,9 +4,14 @@ Claude Code runs this script at three moments (see .claude/settings.json):
 
   after a Read          remember, on this computer only, when this session read the file
   after an edit         tell the room: file, teammate, branch, session, and a short
-                        summary of the change (line counts and new names, never code)
+                        summary of the change (line counts and new names)
   before an edit        ask the room whether a teammate changed the same file in the
-                        last 30 minutes, and say which kind of overlap it is
+                        last 30 minutes, or claimed it, and say which kind of overlap it is
+
+The edit report also carries the changed lines (at most 4,000 characters), so
+the server's free small model can write a one-sentence summary. The server
+does not store them. Set "ai_summary": false in coord/me.json to never send
+them. Files that usually hold secrets (.env, keys) are never sent.
 
 There are four kinds of overlap, strongest first:
 
@@ -17,7 +22,10 @@ There are four kinds of overlap, strongest first:
   WORK IN ANOTHER CHECKOUT   their change is in their own copy, not in yours
   RECENT EDIT                their change was in your copy when this session last read it
 
-The first three pause the edit and ask the person at the keyboard. A recent
+A fifth notice, CLAIMED BY A TEAMMATE, appears when nobody has edited the file
+yet but a teammate announced (claim_work) that they are about to.
+
+All but a recent edit pause the edit and ask the person at the keyboard. A recent
 edit only leaves a note. Set "overlap": "note" in coord/me.json to never pause.
 
 The idea of ranking overlaps by "is their change in my working copy" and "are
@@ -48,7 +56,10 @@ CHECKOUT_KEY = Path.home() / ".team-contract/checkout-key"
 ACTIVE_MINUTES = 5            # a change this fresh, by someone still working, is a live collision
 HASH_LIMIT_BYTES = 2_000_000  # larger files are not fingerprinted
 LEVELS = ["recent", "parallel", "stale", "active"]      # weakest first
+CHANGE_LIMIT = 4000           # characters of changed lines sent for the AI summary
+SECRET_NAMES = re.compile(r"(^\.env|secret|credential|password|\.pem$|\.key$|id_rsa|\.p12$)", re.IGNORECASE)
 TITLES = {
+    "claimed": "CLAIMED BY A TEAMMATE",
     "active": "ACTIVE COLLISION",
     "stale": "OUTDATED READ",
     "parallel": "WORK IN ANOTHER CHECKOUT",
@@ -193,6 +204,26 @@ def change_summary(tool: str, tool_input: dict) -> str | None:
         return None
 
 
+def changed_lines(path: str, tool: str, tool_input: dict) -> str | None:
+    """The lines an edit removed ("-") and added ("+"), for the server's one-sentence summary."""
+    if SECRET_NAMES.search(Path(path).name):
+        return None
+    try:
+        if tool == "Write":
+            parts = [("+", tool_input.get("content"))]
+        elif tool == "NotebookEdit":
+            parts = [("+", tool_input.get("new_source"))]
+        else:
+            edits = tool_input.get("edits")
+            edits = edits if isinstance(edits, list) else [tool_input]
+            parts = [pair for edit in edits if isinstance(edit, dict)
+                     for pair in (("-", edit.get("old_string")), ("+", edit.get("new_string")))]
+        lines = [sign + line for sign, text in parts if isinstance(text, str) for line in text.splitlines()]
+    except (AttributeError, TypeError):
+        return None
+    return "\n".join(lines)[:CHANGE_LIMIT] or None
+
+
 # ------------------------------------------- what this session has read, locally
 
 def reads_file(event: dict) -> Path | None:
@@ -286,6 +317,25 @@ def checked_edits(result: dict) -> list[dict]:
     return edits
 
 
+def checked_claims(result: dict) -> list[dict]:
+    """Teammates' claims on the file. An older server sends none; a strange entry is dropped."""
+    claims = result.get("claims") if isinstance(result, dict) else None
+    return [
+        claim for claim in (claims if isinstance(claims, list) else [])
+        if isinstance(claim, dict) and isinstance(claim.get("author"), str) and isinstance(claim.get("task"), str)
+    ]
+
+
+def claim_line(claim: dict) -> str:
+    if claim.get("until_merged") and isinstance(claim.get("branch"), str):
+        span = f"until branch {label(claim['branch'], 100)} merges"
+    elif isinstance(claim.get("minutes_left"), int):
+        span = f"{claim['minutes_left']} min left"
+    else:
+        span = "time unknown"
+    return f'  {label(claim["author"], 100)} claimed this for "{label(claim["task"], 200)}" ({span}).'
+
+
 def assess(event: dict, path: str, result: dict) -> list[dict]:
     """Each teammate's edit with its kind, strongest first. Edits with nothing to say are dropped."""
     local_now = datetime.now(timezone.utc)
@@ -327,12 +377,23 @@ ADVICE = {
                  "Next: get their changes first, or agree who edits which part. Otherwise a merge conflict is forming."),
     "recent": ("Their change was already in your copy when this session last read the file.",
                "Low urgency: they have likely moved on. Check that your edit does not undo theirs."),
+    "claimed": ("A teammate announced that they are about to work on this file. They have not reported an edit yet.",
+                "Next: pick work outside their claim, or agree with them who changes which part. "
+                "A claim is stated intent, not a lock."),
 }
 
 
-def message(path: str, assessed: list[dict], ask: bool) -> str:
-    top = assessed[0]["level"]
+def top_level(assessed: list[dict], claims: list[dict]) -> str:
+    """The notice's title: the strongest edit, unless only a claim or a mere recent edit is there."""
+    if assessed and (assessed[0]["level"] != "recent" or not claims):
+        return assessed[0]["level"]
+    return "claimed"
+
+
+def message(path: str, assessed: list[dict], ask: bool, claims: list[dict] = ()) -> str:
+    top = top_level(assessed, claims)
     lines = [f"[Team Contract: {TITLES[top]}]", f"File: {label(path)}"]
+    lines += [claim_line(claim) for claim in claims[:3]]
     for edit in assessed[:3]:
         author = label(edit["author"], 100)
         branch = f" on {label(edit['branch'], 100)}" if edit.get("branch") else ""
@@ -347,14 +408,15 @@ def message(path: str, assessed: list[dict], ask: bool) -> str:
     return "\n".join(lines)
 
 
-def warning_output(path: str, assessed: list[dict], ask: bool) -> dict:
-    top = assessed[0]["level"]
+def warning_output(path: str, assessed: list[dict], ask: bool, claims: list[dict] = ()) -> dict:
+    top = top_level(assessed, claims)
     ask = ask and top != "recent"  # a recent edit is a note, never a pause
-    warning = message(path, assessed, ask)
+    warning = message(path, assessed, ask, claims)
     # Remote fields are quoted data, separate from our own instructions. Never
     # construct commands from a teammate's name, file, branch or summary.
     context = (
-        f"[Team Contract: {TITLES[top]}] A teammate reported an edit to the file you are about to change. "
+        f"[Team Contract: {TITLES[top]}] A teammate "
+        f"{'claimed' if top == 'claimed' else 'reported an edit to'} the file you are about to change. "
         f"{ADVICE[top][0]} {ADVICE[top][1]} "
         "A matching branch name does not prove their changes are in this checkout. Explain the overlap "
         "to the user if you cannot verify it. Do not automatically pull, merge or overwrite work "
@@ -365,6 +427,10 @@ def warning_output(path: str, assessed: list[dict], ask: bool) -> dict:
              "when": age_label(edit["minutes"]), "kind": TITLES[edit["level"]],
              "change": label(edit["summary"], 160) if isinstance(edit.get("summary"), str) else ""}
             for edit in assessed[:5]
+        ], "claims": [
+            {"author": label(claim["author"], 100), "task": label(claim["task"], 200),
+             "branch": label(claim.get("branch") or "", 100)}
+            for claim in claims[:5]
         ]}, ensure_ascii=True)
     )
     specific = {"hookEventName": "PreToolUse", "additionalContext": context}
@@ -416,6 +482,8 @@ def run(event: dict) -> dict | None:
             session=session_tag(event), checkout_id=checkout_id(), content_hash=content_hash(path),
             tool=event.get("tool_name"), summary=change_summary(event.get("tool_name"), event.get("tool_input") or {}),
         )
+        if me.get("ai_summary") is not False:
+            payload["change"] = changed_lines(path, event.get("tool_name"), event.get("tool_input") or {})
     request = urllib.request.Request(
         me["server"].rstrip("/") + endpoint, data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"}, method="POST",
@@ -423,9 +491,9 @@ def run(event: dict) -> dict | None:
     with urlopen(request, timeout=2) as response:
         result = json.load(response)
     if name == "PreToolUse":
-        assessed = assess(event, path, result)
-        if assessed:
-            return warning_output(path, assessed, ask=me.get("overlap") != "note")
+        assessed, claims = assess(event, path, result), checked_claims(result)
+        if assessed or claims:
+            return warning_output(path, assessed, ask=me.get("overlap") != "note", claims=claims)
     return None
 
 
