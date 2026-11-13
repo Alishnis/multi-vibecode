@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MCP server that gives the agent one tool: record_decision.
+"""MCP tools for reviewing plans and sharing team decisions.
 
 Claude Code starts this script (see .mcp.json) and talks to it over stdin and
 stdout, one JSON message per line. This is the MCP "stdio" protocol.
@@ -23,7 +23,12 @@ CATEGORIES = ["stack", "api", "data", "convention", "other"]
 INSTRUCTIONS = (
     "This project has a team contract: a shared list of decisions that every "
     "teammate's AI agent reads before it acts. The current contract is added to "
-    "your context on every prompt. "
+    "your context on every prompt. Before implementing a plan that affects "
+    "teammates, call check_plan with a short summary of shared assumptions. "
+    "Report contradictions before writing affected code. For a missing team "
+    "agreement, call request_decision using the topic from the review. Tell "
+    "the user to answer it on the dashboard and wait before relying on it. "
+    "Never record your own answer to a pending team decision. "
     "Whenever you make or accept a project decision that a teammate's agent would "
     "need to know, call record_decision BEFORE writing the code for it. This "
     "includes: choosing a language, framework, library or database; defining an "
@@ -75,49 +80,69 @@ TOOL = {
     },
 }
 
+PLAN_TOOL = {
+    "name": "check_plan",
+    "description": (
+        "Review a coding plan before making changes that affect teammates. "
+        "Returns contradictions and missing agreements. A review does not change the contract."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {"plan": {"type": "string", "maxLength": 4000}},
+        "required": ["plan"],
+    },
+}
+
+REQUEST_TOOL = {
+    "name": "request_decision",
+    "description": (
+        "Ask a human to decide a missing shared agreement on the dashboard. "
+        "Reuse the review's topic so teammates share one request. Options are complete decision statements."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "topic": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$", "maxLength": 80},
+            "category": {"type": "string", "enum": CATEGORIES},
+            "question": {"type": "string", "maxLength": 240},
+            "options": {"type": "array", "items": {"type": "string", "maxLength": 500}, "maxItems": 4},
+        },
+        "required": ["topic", "category", "question", "options"],
+    },
+}
+
 
 def log(message: str) -> None:
     print(f"team-contract: {message}", file=sys.stderr, flush=True)
 
 
-def record_decision(arguments: dict) -> tuple[str, bool]:
-    """Send one decision to the coordination server. Returns (reply text, is_error)."""
-    category = arguments.get("category")
-    text = str(arguments.get("text", "")).strip()
-    if category not in CATEGORIES:
-        return f"Not recorded: category must be one of {', '.join(CATEGORIES)}.", True
-    if not text:
-        return "Not recorded: text is empty.", True
-
+def post(path: str, arguments: dict) -> dict:
     try:
         me = json.loads(ME_FILE.read_text())
         name, room, server = me["name"], me["room"], me["server"].rstrip("/")
     except Exception as error:
-        return (
-            f"Not recorded: could not read {ME_FILE} ({error!r}). Tell the user to "
-            "copy coord/me.example.json to coord/me.json and fill it in.",
-            True,
-        )
+        raise ValueError("Run the installer to configure coord/me.json.") from error
 
-    body = {"room": room, "author": name, "category": category, "text": text}
+    body = {**arguments, "room": room, "author": name}
     request = urllib.request.Request(
-        f"{server}/decisions",
+        f"{server}{path}",
         data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            reply = json.load(response)
+            return json.load(response)
     except urllib.error.HTTPError as error:
         detail = error.read().decode(errors="replace")[:300]
-        return f"Not recorded: the server rejected it ({error.code}): {detail}", True
+        raise ValueError(f"The server rejected the request ({error.code}): {detail}") from error
     except Exception as error:
-        return (
-            f"Not recorded: could not reach the team contract server at {server} "
-            f"({error!r}). Tell the user the decision was NOT shared with the team.",
-            True,
-        )
+        raise ValueError(f"Could not reach the team contract server at {server} ({error!r}).") from error
+
+
+def record_decision(arguments: dict) -> str:
+    text = str(arguments.get("text", "")).strip()
+    reply = post("/decisions", {"category": arguments.get("category"), "text": text})
 
     conflict = reply.get("conflict")
     if conflict:
@@ -128,7 +153,7 @@ def record_decision(arguments: dict) -> tuple[str, bool]:
             f"(by {conflict.get('existing_author', 'a teammate')}). "
             "Stop. Do not write code for this decision. Tell the user about the "
             "conflict and ask whether to follow the team's decision or change it."
-        ), False
+        )
 
     duplicate = reply.get("duplicate")
     if duplicate:
@@ -136,7 +161,7 @@ def record_decision(arguments: dict) -> tuple[str, bool]:
             f"Already in the team contract: \"{duplicate.get('text', '')}\" "
             f"(by {duplicate.get('author', 'a teammate')}). Nothing new was recorded. "
             "Follow the existing decision."
-        ), False
+        )
 
     note = ""
     check = str(reply.get("check", ""))
@@ -145,7 +170,29 @@ def record_decision(arguments: dict) -> tuple[str, bool]:
             f" Note: the conflict check did not run ({check}), so this decision "
             "was not compared with the rest of the contract."
         )
-    return f"Recorded in the team contract: [{category}] {text} (by {name}).{note}", False
+    decision = reply["decision"]
+    return f"Recorded in the team contract: [{decision['category']}] {decision['text']} (by {decision['author']}).{note}"
+
+
+def check_plan(arguments: dict) -> str:
+    review = post("/plans/check", arguments)
+    return json.dumps(review, ensure_ascii=False)
+
+
+def request_decision(arguments: dict) -> str:
+    reply = post("/decision-requests", arguments)
+    request = reply["request"]
+    if reply["decision"]:
+        return f"Request #{request['id']} was answered: {reply['decision']['text']}"
+    state = "Opened" if reply["created"] else "Already open"
+    return f"{state}: request #{request['id']}, {request['question']} Wait for a human to answer on the dashboard."
+
+
+TOOLS = {
+    "record_decision": (TOOL, record_decision),
+    "check_plan": (PLAN_TOOL, check_plan),
+    "request_decision": (REQUEST_TOOL, request_decision),
+}
 
 
 def handle(message: dict) -> dict | None:
@@ -171,13 +218,17 @@ def handle(message: dict) -> dict | None:
     if method == "ping":
         return result({})
     if method == "tools/list":
-        return result({"tools": [TOOL]})
+        return result({"tools": [tool for tool, _ in TOOLS.values()]})
     if method == "tools/call":
         params = message.get("params") or {}
-        if params.get("name") != TOOL["name"]:
+        tool = TOOLS.get(params.get("name"))
+        if tool is None:
             text, is_error = f"Unknown tool: {params.get('name')}", True
         else:
-            text, is_error = record_decision(params.get("arguments") or {})
+            try:
+                text, is_error = tool[1](params.get("arguments") or {}), False
+            except ValueError as error:
+                text, is_error = str(error), True
         return result({"content": [{"type": "text", "text": text}], "isError": is_error})
     return {
         "jsonrpc": "2.0",

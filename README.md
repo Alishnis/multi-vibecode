@@ -48,3 +48,13 @@ The hosted flow has been tested with two independent sessions on one Mac. Setup 
 Copy `.env.example` to `.env` and put your OpenRouter API key there to enable conflict checking. Start the server with `sh start_server.sh`, then use `http://127.0.0.1:8000` as the installer URL for both sessions. Keep the server terminal open during the test.
 
 The hosted prototype has no accounts. Anyone who knows the room code can access and change its decisions. Use a fresh room with sample decisions when testing.
+
+## Check a plan and request a decision
+
+Update your checkout, rerun the installer for each test project, and restart Claude Code to load the new tools. The server needs a working OpenRouter key for plan reviews.
+
+1. Ask Claude to check a plan that depends on a shared choice, such as the response shape for `GET /todos`. `check_plan` reports contradictions and missing agreements without changing the contract.
+2. For a missing agreement, ask Claude to use `request_decision` with the topic from the review. Requests with the same topic in a room share one record. Ask from a second session to see it reuse the existing request.
+3. On the dashboard, select **Answer request**, choose a suggested decision or write one, and enter your name and approval token. The answer joins the contract once. A fresh prompt in either project reads it through the existing hook.
+
+To enable dashboard approval, set a long random `CONTRACT_APPROVAL_TOKEN` in your local `.env` or in the Render service's environment settings. Share the token with the people who should approve decisions. Keep it out of project files and URLs. When set, the same token is required to reset rooms. It protects approval and reset, while the existing room-code access for reading and proposing decisions still applies.

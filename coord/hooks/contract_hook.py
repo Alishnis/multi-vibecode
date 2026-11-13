@@ -54,6 +54,11 @@ def main() -> None:
         )
     # Repeated on every prompt, because agents forget instructions given once.
     print(
+        "Before a plan that affects teammates, use team-contract check_plan. "
+        "If the review finds a missing shared agreement, use request_decision "
+        "and wait for the dashboard answer before relying on it. "
+    )
+    print(
         "New project decisions made in this session (framework, library, database, "
         "API endpoint, data field name, port, convention) are recorded with the "
         "team-contract record_decision tool before the code for them is written, "

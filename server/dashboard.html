@@ -144,6 +144,32 @@
   }
   footer button:hover { color: var(--danger); border-color: var(--danger); }
 
+  #requests { margin-bottom: 24px; }
+  .request-card { padding: 14px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  .request-card h3 { margin: 0 0 4px; font-size: 1.05rem; }
+  .request-card p { margin: 6px 0; }
+  .request-card .answered { color: var(--ok); font-weight: 600; }
+  .action {
+    font: inherit; color: var(--accent); background: var(--panel);
+    border: 1px solid var(--accent); border-radius: 7px; padding: 6px 12px; cursor: pointer;
+  }
+  .action:disabled { cursor: wait; opacity: .6; }
+  dialog {
+    width: min(520px, calc(100% - 32px)); background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 12px; padding: 24px;
+  }
+  dialog::backdrop { background: #0008; }
+  dialog h2 { color: var(--text); font-size: 1.2rem; text-transform: none; letter-spacing: normal; }
+  dialog label { display: block; margin: 12px 0; font-size: .9rem; }
+  dialog input, dialog textarea {
+    width: 100%; display: block; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px; padding: 8px;
+  }
+  .answer-options { display: flex; flex-wrap: wrap; gap: 6px; }
+  .answer-options button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+  .dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .form-error { color: var(--danger); }
+
   @media (max-width: 860px) {
     .grid, .sides { grid-template-columns: 1fr; }
     .people { margin-left: 0; }
@@ -160,6 +186,11 @@
     <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
     <div class="people" id="people"></div>
   </header>
+
+  <section id="requests" class="panel" hidden>
+    <h2>Decision requests <span class="count" id="request-count"></span></h2>
+    <div id="request-list"></div>
+  </section>
 
   <section id="conflicts" hidden>
     <h2>Conflicts <span class="count" id="conflict-count"></span></h2>
@@ -183,6 +214,21 @@
   </footer>
 </div>
 
+<dialog id="answer-dialog" aria-labelledby="answer-question">
+  <form id="answer-form">
+    <h2 id="answer-question"></h2>
+    <div id="answer-options" class="answer-options" aria-label="Suggested answers"></div>
+    <label>Decision<textarea id="answer-text" required maxlength="500" rows="3"></textarea></label>
+    <label>Your name<input id="answer-author" required maxlength="50" autocomplete="name"></label>
+    <label>Approval token<input id="answer-token" type="password" required autocomplete="off"></label>
+    <p id="answer-error" class="form-error" role="alert" hidden></p>
+    <div class="dialog-actions">
+      <button class="action" id="answer-submit">Approve decision</button>
+      <button class="action" id="answer-cancel" type="button">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
   // The room comes from the address: http://localhost:8000/?room=demo
   const room = new URLSearchParams(location.search).get("room") || "demo";
@@ -194,6 +240,9 @@
 
   let lastSignature = null;   // what the lists looked like at the last redraw
   let seen = null;            // items already shown; null until the first load
+  let activeRequest = null;
+  let approvalEnabled = false;
+  let loading = false;
 
   // Build an element with text. textContent is used everywhere, so text that
   // an agent recorded can never be run as HTML.
@@ -306,12 +355,94 @@
     seen = nowSeen;
   }
 
+  function renderRequests(state) {
+    const requests = state.decision_requests || [];
+    const answers = new Map(state.decisions.map((d) => [d.id, d]));
+    $("requests").hidden = !requests.length;
+    $("request-count").textContent = `${requests.filter((r) => r.decision_id === null).length} open`;
+    const list = $("request-list");
+    list.replaceChildren();
+    for (const request of [...requests].sort((a, b) => Number(a.decision_id !== null) - Number(b.decision_id !== null))) {
+      const card = el("article", "request-card");
+      const meta = el("p", "meta", `${request.category} · Requested by ${request.author} · `);
+      meta.append(timeSpan(request.created_at));
+      card.append(el("h3", null, request.question), meta);
+      if (request.decision_id !== null) {
+        const answer = answers.get(request.decision_id);
+        card.append(el("p", "answered", answer ? `Answered · ${answer.text}` : "Answered"));
+      } else if (state.approval_enabled) {
+        const button = el("button", "action", "Answer request");
+        button.setAttribute("aria-label", `Answer request: ${request.question}`);
+        button.addEventListener("click", () => showAnswer(request));
+        card.append(button);
+      } else {
+        card.append(el("p", "meta", "Approval is disabled on this server."));
+      }
+      list.append(card);
+    }
+  }
+
+  function showAnswer(request) {
+    activeRequest = request;
+    $("answer-form").reset();
+    $("answer-error").hidden = true;
+    $("answer-question").textContent = request.question;
+    const options = $("answer-options");
+    options.replaceChildren();
+    for (const option of request.options) {
+      const button = el("button", "action", option);
+      button.type = "button";
+      button.addEventListener("click", () => {
+        $("answer-text").value = option;
+        $("answer-text").focus();
+      });
+      options.append(button);
+    }
+    $("answer-dialog").showModal();
+  }
+
+  $("answer-cancel").addEventListener("click", () => $("answer-dialog").close());
+  $("answer-dialog").addEventListener("close", () => {
+    $("answer-token").value = "";
+    activeRequest = null;
+  });
+  $("answer-dialog").addEventListener("cancel", (event) => {
+    if ($("answer-submit").disabled) event.preventDefault();
+  });
+  $("answer-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!activeRequest || $("answer-submit").disabled) return;
+    const errorBox = $("answer-error");
+    errorBox.hidden = true;
+    $("answer-submit").disabled = $("answer-cancel").disabled = true;
+    try {
+      const response = await fetch(`/decision-requests/${activeRequest.id}/answer`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json", "X-Contract-Token": $("answer-token").value},
+        body: JSON.stringify({room, author: $("answer-author").value, text: $("answer-text").value}),
+      });
+      if (!response.ok) {
+        const {detail} = await response.json();
+        throw new Error(typeof detail === "string" ? detail : "Enter a name and a decision to approve.");
+      }
+      $("answer-dialog").close();
+      tick();
+    } catch (error) {
+      errorBox.textContent = error.message || "Could not submit the answer. Try again.";
+      errorBox.hidden = false;
+    } finally {
+      $("answer-submit").disabled = $("answer-cancel").disabled = false;
+    }
+  });
+
   function setLive(ok) {
     $("live").classList.toggle("down", !ok);
     $("live-text").textContent = ok ? "live" : "connection lost";
   }
 
   async function tick() {
+    if (loading) return;
+    loading = true;
     let state;
     try {
       const response = await fetch(`/state?room=${encodeURIComponent(room)}`, { cache: "no-store" });
@@ -320,15 +451,19 @@
     } catch {
       setLive(false);
       return;
+    } finally {
+      loading = false;
     }
     setLive(true);
+    approvalEnabled = state.approval_enabled;
 
     // Redraw the lists only when something was added or removed, so the
     // highlight on a new item is not interrupted by the next refresh.
-    const signature = JSON.stringify([state.decisions.map((d) => d.id), state.conflicts.map((c) => c.id)]);
+    const signature = JSON.stringify([state.decisions, state.conflicts, state.decision_requests, approvalEnabled]);
     if (signature !== lastSignature) {
       lastSignature = signature;
       renderLists(state);
+      renderRequests(state);
     }
     renderPeople(state.people || []);
     updateTimes(state.now);
@@ -341,8 +476,13 @@
   }
 
   $("reset").addEventListener("click", async () => {
-    if (!confirm(`Delete every decision and conflict in room "${room}"? This cannot be undone.`)) return;
-    await fetch(`/reset?room=${encodeURIComponent(room)}`, { method: "POST" });
+    if (!confirm(`Delete every decision, conflict and request in room "${room}"? This cannot be undone.`)) return;
+    const token = approvalEnabled ? prompt("Enter the approval token to reset this room.") : null;
+    if (approvalEnabled && !token) return;
+    const response = await fetch(`/reset?room=${encodeURIComponent(room)}`, {
+      method: "POST", headers: token ? {"X-Contract-Token": token} : {},
+    });
+    if (!response.ok) alert("Could not reset this room. Check the approval token and try again.");
     tick();
   });
 
