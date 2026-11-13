@@ -222,13 +222,40 @@ def start_task(repo: str, base: str, branch: str) -> None:
     if branch == base:
         raise ValueError(f"Choose a new name. {base} is the shared branch.")
     command("git", "check-ref-format", "--branch", branch)
-    if command("git", "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"):
-        raise ValueError("You have local edits. Commit or stash them before starting a new task.")
+    current = command("git", "branch", "--show-current")
+    edits = command("git", "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none")
+    if edits and current != base:
+        # Edits on another task branch belong to that task.
+        raise ValueError(
+            f"You have unsaved edits on {current or 'this commit'}. Commit them there first, "
+            "or set them aside with git stash -u. Then start the new task."
+        )
     if command("git", "ls-remote", "--heads", "origin", f"refs/heads/{branch}"):
         raise ValueError(f"{branch} already exists on {repo}. Pick a unique name for this task.")
     ref = fetch_base(base)
-    command("git", "switch", "--no-track", "--no-overwrite-ignore", "-c", branch, ref)
-    notice(f"Started {branch} from the latest shared {base}.")
+    stranded = int(command("git", "rev-list", "--count", f"{ref}..HEAD")) if current == base else 0
+    if stranded:
+        # Commits were made on the shared branch by mistake. The task takes them
+        # along, and the local shared branch goes back to match GitHub. Nothing
+        # is lost: the commits now live on the task branch.
+        command("git", "switch", "--no-overwrite-ignore", "-c", branch)
+        command("git", "branch", "-f", base, ref)
+        notice(f"Started {branch}. It includes the {stranded} commit(s) you made on {base}.")
+        print(f"  Your local {base} matches GitHub again.")
+    else:
+        try:
+            command("git", "switch", "--no-track", "--no-overwrite-ignore", "-c", branch, ref)
+        except ValueError as error:
+            if not edits:
+                raise
+            raise ValueError(
+                f"Your unsaved edits touch files that changed on GitHub, so {branch} was not started. "
+                f"Set them aside with git stash -u, run {CLI} start {branch} again, "
+                "then bring them back with git stash pop."
+            ) from error
+        notice(f"Started {branch} from the latest shared {base}.")
+    if edits:
+        print(f"  Your unsaved edits came along to {branch}.")
     print(f"  Next: make and commit your edits, then run {CLI} publish --ready.")
 
 
@@ -253,7 +280,8 @@ def sync(me: dict, repo: str, action: str, title: str | None, ready: bool = Fals
     if not branch:
         raise ValueError("Switch to a named branch before checking or publishing.")
     if action == "publish" and branch == base:
-        raise ValueError(f"{base} is the shared branch. Run {CLI} start my-task before making and publishing edits.")
+        raise ValueError(f"{base} is the shared branch. Run {CLI} start my-task first. "
+                         f"It moves any work you already did on {base} to the new task branch.")
     ref = fetch_base(base)
     behind, ahead = map(int, command(
         "git", "rev-list", "--left-right", "--count", f"{ref}...HEAD",
@@ -311,16 +339,17 @@ def approved_requests(repo: str, base: str) -> dict[int, str]:
     }
 
 
-def merged_update(repo: str, base: str, ref: str) -> tuple[str, list[int]] | None:
+def merged_update(repo: str, base: str, ref: str, any_merge: bool = False) -> tuple[str, list[int]] | None:
     # Match GitHub's merge commits to the fetched branch history. An open PR
-    # or an unrelated remote tip is not a pull target.
+    # or an unrelated remote tip is not a pull target. By default only pull
+    # requests that someone approved count; any_merge accepts every merged one.
     commits = command("git", "rev-list", "--first-parent", f"HEAD..{ref}").splitlines()
     if not commits:
         return None
     merged = pull_requests(repo, base, "merged", "number,mergeCommit,reviewDecision,latestReviews")
     by_commit = {
         pr["mergeCommit"]["oid"]: pr["number"] for pr in merged
-        if pr.get("mergeCommit") and has_approval(pr)
+        if pr.get("mergeCommit") and (any_merge or has_approval(pr))
     }
     matches = [(commit, by_commit[commit]) for commit in commits if commit in by_commit]
     if not matches:
@@ -334,22 +363,68 @@ def update_checkout(base: str, target: str) -> str:
     for operation in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply", "sequencer", "BISECT_START"):
         if (PROJECT / command("git", "rev-parse", "--git-path", operation)).exists():
             return "Finish your current Git operation before syncing."
-    if command("git", "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"):
-        return "Local changes detected. Commit or set them aside with git stash, then try syncing again."
+    # New files that Git does not track yet are left alone: Git itself refuses
+    # the update if one of them would be overwritten.
+    edits = command("git", "status", "--porcelain", "--untracked-files=no", "--ignore-submodules=none").splitlines()
+    if edits:
+        # Each line is two status letters, then the path. command() trims the
+        # output, so the first line may have lost its leading space.
+        names = ", ".join(line[2:].strip() for line in edits[:3]) + (f" and {len(edits) - 3} more" if len(edits) > 3 else "")
+        return (f"Sync paused: you have unsaved edits on {base} ({names}). "
+                f"Run {CLI} start my-task to move them to a task branch.")
     ahead, behind = map(int, command(
         "git", "rev-list", "--left-right", "--count", f"HEAD...{target}",
     ).split())
-    if ahead or not behind:
-        return f"Local {base} cannot be fast-forwarded. Review it before syncing."
-    command("git", "merge", "--ff-only", "--no-autostash", "--no-overwrite-ignore", target)
+    if ahead:
+        return (f"Sync paused: your local {base} has {ahead} commit(s) that GitHub does not have. "
+                f"Run {CLI} start my-task to move them to a task branch.")
+    if not behind:
+        return f"Local {base} already has this update."
+    try:
+        command("git", "merge", "--ff-only", "--no-autostash", "--no-overwrite-ignore", target)
+    except ValueError as error:
+        if "untracked working tree files would be overwritten" in str(error):
+            return ("Sync paused: the update adds a file with the same name as one of your new files. "
+                    "Rename or move your file, then sync again.")
+        return f"Sync paused: Git could not update {base}. Nothing was changed. {str(error).splitlines()[0]}"
     return f"Updated local {base} to {target[:12]}."
 
 
-def watch(me: dict, interval: int, notify_only: bool, once: bool = False) -> None:
+def left_behind(base: str, ref: str, any_merge: bool) -> str:
+    """Say so when the shared branch has newer commits that syncing leaves alone."""
+    if command("git", "branch", "--show-current") != base:
+        return ""
+    count = int(command("git", "rev-list", "--count", f"HEAD..{ref}"))
+    if not count:
+        return ""
+    if any_merge:
+        return (f"{base} on GitHub has {count} newer commit(s) that did not come from a merged "
+                "pull request, so they were not applied. To get them, run git pull.")
+    return (f"{base} on GitHub has {count} newer commit(s) that did not come from an approved "
+            f"pull request, so they were not applied. To get them, run git pull, or run "
+            f"{CLI} watch --any-merge to also apply merged pull requests that nobody approved.")
+
+
+def report_base_status(me: dict, repo: str, base: str, ref: str) -> None:
+    """After a sync, tell the dashboard that this checkout is up to date. Best effort."""
+    try:
+        behind, ahead = map(int, command(
+            "git", "rev-list", "--left-right", "--count", f"{ref}...HEAD",
+        ).split())
+        api(me, "POST", "/git/activity", {
+            "author": me["name"], "repository": repo, "base_branch": base,
+            "branch": base, "ahead": ahead, "behind": behind, "pr_number": None, "pr_state": None,
+        })
+    except (OSError, ValueError, KeyError):
+        pass  # the files are updated; the dashboard catches up on the next status
+
+
+def watch(me: dict, interval: int, notify_only: bool, once: bool = False, any_merge: bool = False) -> None:
+    kind = "merged" if any_merge else "approved"
     if once:
-        notice("Checking GitHub for approved changes…")
+        notice(f"Checking GitHub for {kind} changes…")
     else:
-        mode = "show notices only" if notify_only else "update your clean shared branch after an approved merge"
+        mode = "show notices only" if notify_only else f"update your clean shared branch after {'a' if any_merge else 'an approved'} merge"
         notice(f"Checking GitHub about every {interval}s to {mode}. Press Ctrl+C to stop.")
     approvals: set[tuple[str, str, int, str]] = set()
     last_status = ""
@@ -363,16 +438,24 @@ def watch(me: dict, interval: int, notify_only: bool, once: bool = False) -> Non
                 notice(f"PR #{number} approved. Waiting for someone to merge it on GitHub. "
                        f"https://github.com/{repo}/pull/{number}")
             approvals = current
-            update = merged_update(repo, base, fetch_base(base))
+            ref = fetch_base(base)
+            update = merged_update(repo, base, ref, any_merge)
             status = ""
+            applied = False
             if update:
                 target, numbers = update
                 prs = ", ".join(f"#{number}" for number in numbers)
                 result = (f"To apply the update, run {CLI} watch --once."
                           if notify_only else update_checkout(base, target))
-                status = f"Approved PRs merged into {base}: {prs}. {result}"
+                applied = result.startswith("Updated")
+                status = f"{kind.capitalize()} PRs merged into {base}: {prs}. {result}"
+                if applied:
+                    report_base_status(me, repo, base, ref)
+            if applied or not update:
+                # Anything still newer on GitHub is work this command does not apply.
+                status = " ".join(part for part in (status, left_behind(base, ref, any_merge)) if part)
             if not connected and not status and not current:
-                notice(f"No approved updates to apply for {base} in {repo}.")
+                notice(f"No {kind} updates to apply for {base} in {repo}.")
             connected = True
         except (OSError, ValueError, KeyError) as error:
             if once:
@@ -403,6 +486,8 @@ def main() -> None:
     watch_parser.add_argument("--interval", type=int, default=30, help="seconds between checks (minimum 15)")
     watch_parser.add_argument("--notify-only", action="store_true", help="show updates without applying them")
     watch_parser.add_argument("--once", action="store_true", help="check once, apply eligible updates, and exit")
+    watch_parser.add_argument("--any-merge", action="store_true",
+                              help="also apply merged pull requests that nobody approved")
     args = parser.parse_args()
     if args.action == "watch" and args.interval < 15:
         parser.error("--interval must be at least 15 seconds")
@@ -422,7 +507,7 @@ def main() -> None:
             start_task(repo, linked_base(me, repo), args.branch)
         elif args.action == "watch":
             linked_base(me, origin_repository())
-            watch(me, args.interval, args.notify_only, args.once)
+            watch(me, args.interval, args.notify_only, args.once, args.any_merge)
         else:
             sync(me, origin_repository(), args.action, getattr(args, "title", None), getattr(args, "ready", False))
     except (OSError, ValueError, KeyError) as error:

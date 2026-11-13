@@ -528,7 +528,7 @@
         title: "Share changes for review",
         intro: "Run these commands in your project folder on your computer.",
         steps: [
-          ["Start a task", "Replace my-task with a unique name, such as ali/todo-api. This starts from the latest shared code.", `${cli} start my-task`],
+          ["Start a task", "Replace my-task with a unique name, such as ali/todo-api. This starts from the latest shared code. Work you already began on the shared branch comes along.", `${cli} start my-task`],
           ["Make and commit your edits", "Select the files you want to share in your editor’s Source Control panel and commit them."],
           ["Publish for review", "This uploads your commits and opens or updates a pull request. Share the review link printed in Terminal.", `${cli} publish --ready`],
         ],
@@ -539,6 +539,7 @@
         steps: [
           ["Check once", "Apply approved, merged changes if you’re on the shared branch and have no local edits.", `${cli} watch --once`],
           ["Or keep syncing automatically", "Leave this terminal open for approval and merge notices. Press Ctrl+C when you want it to stop.", `${cli} watch`],
+          ["If your team merges without approvals", "By default only approved pull requests are applied. This also applies merged pull requests that nobody approved.", `${cli} watch --any-merge`],
         ],
       },
     };

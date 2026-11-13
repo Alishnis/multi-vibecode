@@ -152,7 +152,7 @@ class PublishTest(unittest.TestCase):
                 self.assertEqual(reports[-1]["behind"], 1)
                 self.assertEqual([r["pr_number"] for r in reports], [17, 17, 17])
                 self.assertEqual(len(pr_calls), 1)
-                with self.assertRaisesRegex(ValueError, "local edits"):
+                with self.assertRaisesRegex(ValueError, "unsaved edits on ali/api"):
                     git_sync.start_task("example/todos", "main", "ali/next")
                 (repo / "unfinished.txt").unlink()
                 with self.assertRaisesRegex(ValueError, "already exists"):

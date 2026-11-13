@@ -872,6 +872,7 @@ def link_repository(link: RoomRepository, x_contract_token: str | None = Header(
 
 @app.post("/git/activity")
 def report_git_activity(activity: GitActivity) -> dict:
+    touch_person(activity.room, activity.author)
     with connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
         repository = room_repository(conn, activity.room)
