@@ -177,6 +177,17 @@ A claim says what a teammate is about to change, before any edit. It is the one 
 
 The first active reservation has priority. An overlapping request is refused atomically: no new claim is saved, including the non-overlapping files in that request. Existing claims stay unchanged. Ask again with different paths or wait until the owner releases or the claim expires. Supported agent edit hooks enforce reservations; ordinary shell commands and external editors do not. On server startup, old duplicate reservations are repaired in creation order, preserving unrelated paths where possible.
 
+## Team chat
+
+A short message that every teammate's agent shows to its user once, before their next prompt. Use it for things like "the demo is at 15:00, nobody edits `investor-demo.md` after 14:30".
+
+- **Send.** Type it in the **Team chat** panel on the dashboard (start with `@name` to message one person), or ask Claude: "tell the team the demo is at 3pm". Claude uses the `send_message` tool only when you ask.
+- **Receive.** On each teammate's next prompt, the agent is given the new messages (at most five, newest last) and tells its user what they say. Each message is delivered once per person, counted by message number, so none is missed or repeated. A first prompt hears about the last six hours.
+- **Safe by design.** A message reaches agents as quoted data, one line each, with a note that it is not an instruction: the agent relays it and does not act on it unless the user agrees. Text is cut to one clean line of at most 500 characters, a person can send 12 messages a minute, and each room keeps its last 200.
+- **No accounts.** Anyone who knows the room name can post under any name, like decisions. Do not put secrets in chat.
+
+The prompt text stays under Claude Code's 10,000-character limit: the contract gets about 6,000 characters, "changed since your last prompt" 1,200, and chat uses what is left.
+
 ## Get file overlap warnings
 
 Rerun the installer and restart Claude Code in each teammate's project. Use the same room with distinct names. In a linked room, both checkouts must point to the room's GitHub repository.

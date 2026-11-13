@@ -113,6 +113,16 @@
   .who-line .am-avatar { width: 22px; height: 22px; font-size: 10px; }
   .who-line code { background: #fff; border: 1px solid var(--am-line); border-radius: 8px; padding: 1px 8px; }
 
+  /* team chat */
+  #messages { display: grid; gap: 8px; max-height: 340px; overflow-y: auto; margin: 12px 0; padding-right: 2px; }
+  .msg { padding: 12px 14px; background: var(--am-inset); border-radius: 16px; }
+  .msg .who-line { margin-top: 0; }
+  .msg .who-line strong { color: var(--am-ink); font-weight: 600; }
+  .msg-text { margin-top: 6px; color: var(--am-ink); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .chat-form { display: grid; grid-template-columns: minmax(0, 110px) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .chat-form input { min-width: 0; padding: 10px 14px; color: var(--am-ink); background: var(--am-inset); border: 1px solid var(--am-line-hi); border-radius: 12px; font: 400 14px/1.4 var(--am-font); }
+  .chat-form input:focus { outline: 3px solid #cfe0ff; border-color: var(--am-blue); background: #fff; }
+
   /* conflicts */
   .conflict { margin-bottom: 12px; padding: 18px; background: #fff; border: 1px solid var(--am-ember-line); border-radius: 20px; }
   .conflict:last-child { margin-bottom: 0; }
@@ -227,6 +237,7 @@
   <div class="am-links">
     <a href="#overview" aria-current="location">overview</a>
     <a href="#claim-panel">claims</a>
+    <a href="#chat-panel">chat</a>
     <a href="#git-panel">github</a>
     <a href="#contract">decisions</a>
     <a href="#file-panel">edits</a>
@@ -293,6 +304,17 @@
       <h2>Claimed work</h2>
       <p class="meta">The first reservation wins. Supported agent edits pause when a teammate owns the file.</p>
       <ul id="claims"></ul>
+    </section>
+    <section class="panel" id="chat-panel">
+      <h2>Team chat</h2>
+      <p class="meta">Every teammate's agent shows a new message to its user once, before their next prompt. Start with @name to message one person.</p>
+      <ul id="messages" aria-live="polite"></ul>
+      <form id="chat-form" class="chat-form">
+        <input id="chat-name" required maxlength="50" placeholder="Your name" autocomplete="name" aria-label="Your name">
+        <input id="chat-text" required maxlength="500" placeholder="Message the team" autocomplete="off" aria-label="Message">
+        <button class="control primary" id="chat-send" type="submit">Send</button>
+      </form>
+      <p id="chat-error" class="form-error" role="alert" hidden></p>
     </section>
     <section class="panel" id="file-panel">
       <h2>Recent file edits</h2>
@@ -908,6 +930,49 @@
     if (!(claims || []).length) list.append(el("li", "empty", "Nothing is claimed. Agents claim files before a task; you can also ask Claude to “claim” them."));
   }
 
+  function renderMessages(messages) {
+    const list = $("messages");
+    const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    list.replaceChildren();
+    for (const message of messages || []) {
+      const row = el("li", "msg");
+      const head = el("div", "who-line");
+      head.append(avatar(message.author), el("strong", null, message.author));
+      if (message.to) head.append(el("span", "am-chip blue", `to ${message.to}`));
+      head.append(timeSpan(message.created_at));
+      row.append(head, el("div", "msg-text", message.text));
+      list.append(row);
+    }
+    if (!(messages || []).length) list.append(el("li", "empty", "No messages yet. Every agent will show yours to its user once."));
+    if (atBottom) list.scrollTop = list.scrollHeight;
+  }
+
+  let knownPeople = [];
+  $("chat-name").value = savedName();
+  $("chat-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const author = $("chat-name").value.trim();
+    let text = $("chat-text").value.trim();
+    if (!author || !text || $("chat-send").disabled) return;
+    let to = null;
+    const mention = text.match(/^@(\S+)\s+([\s\S]+)$/);
+    const person = mention && knownPeople.find((p) => p.name.toLowerCase() === mention[1].toLowerCase());
+    if (person) { to = person.name; text = mention[2]; }
+    $("chat-error").hidden = true;
+    $("chat-send").disabled = true;
+    try {
+      await send("/messages", {room, author, text, ...(to ? {to} : {})});
+      remember(author);
+      $("chat-text").value = "";
+      tick();
+    } catch (error) {
+      $("chat-error").textContent = error.message;
+      $("chat-error").hidden = false;
+    } finally {
+      $("chat-send").disabled = false;
+    }
+  });
+
   function renderFiles(files) {
     const list = $("file-edits");
     list.replaceChildren();
@@ -975,6 +1040,12 @@
     if ($("git-panel").dataset.signature !== gitSignature) {
       renderGit(state.git);
       $("git-panel").dataset.signature = gitSignature;
+    }
+    knownPeople = state.people || [];
+    const messagesSignature = JSON.stringify(state.messages ?? []);
+    if ($("messages").dataset.signature !== messagesSignature) {
+      renderMessages(state.messages);
+      $("messages").dataset.signature = messagesSignature;
     }
     renderPeople(state.people || []);
     $("active-total").textContent = (state.people || []).filter((person) => person.seconds_ago < ACTIVE_SECONDS).length;
