@@ -103,7 +103,7 @@ Once the room is linked to GitHub, you can stay inside Claude Code. The `team-co
 | --- | --- | --- |
 | “Start a task for the delete endpoint.” | `start_task` | Creates a task branch from the latest shared code. Work you already began on the shared branch comes along. |
 | “Share my work.” | `share_work` | Claude commits the files for the task, pushes the branch, and opens or updates one pull request. You get the link. |
-| “Get the latest code.” | `get_latest` | Applies approved, merged work when you are on the shared branch with no unsaved edits. Otherwise it says why nothing changed. |
+| “Get the latest code.” | `get_latest` | Applies merged work (approval review optional) when you are on the shared branch with no unsaved edits. Otherwise it says why nothing changed. |
 | “Where does my branch stand?” | `branch_status` | Reports commits ahead and behind and the review status, and updates the dashboard. |
 
 These tools run the same `coord/git_sync.py` commands described below, so the terminal and Claude behave the same way. Linking a room, reviewing, and merging stay with people. After updating, rerun the installer in each project and restart Claude Code so it loads the new tools.
@@ -137,25 +137,25 @@ In each linked clone, rerun the installer and start this in a separate terminal:
 python3 coord/git_sync.py watch
 ```
 
-Each running watcher checks GitHub about every 30 seconds. It prints a notice when it sees an approved open PR. After someone merges that PR into the room's base branch, the watcher prints another notice and fast-forwards the local base branch to the detected merge commit if the checkout is clean. Task branches, local edits and diverged history are left alone. Use a separate clean base-branch clone if you want it to update while you work elsewhere. The watcher never merges the PR on GitHub.
+Each running watcher checks GitHub about every 30 seconds. It prints a notice when it sees an approved open PR. After someone merges a PR into the room's base branch, the watcher prints another notice and fast-forwards the local base branch to the detected merge commit if the checkout is clean. Task branches, local edits and diverged history are left alone. Use a separate clean base-branch clone if you want it to update while you work elsewhere. The watcher never merges the PR on GitHub.
 
 Before testing automatic updates, run `git status --short` in the receiving clone. The installer can add shared project files that show up as local changes. Commit those shared setup files to the repository first, then use a clone that already has that commit. Leave `coord/me.json` and `.claude/settings.local.json` local and ignored.
 
-Use `python3 coord/git_sync.py watch --once` for a single check and sync, or add `--notify-only` to see notices without applying changes. Press Ctrl+C to stop continuous watching. The command is opt-in on every laptop and uses your existing GitHub CLI login. Approve from a different GitHub account than the PR author when testing with two clones. GitHub controls review requirements and whether a new commit dismisses approval. The watcher checks the latest 50 PRs per state and applies a fetched commit it can match to an approved, merged PR.
+Use `python3 coord/git_sync.py watch --once` for a single check and sync, or add `--notify-only` to see notices without applying changes. Press Ctrl+C to stop continuous watching. The command is opt-in on every laptop and uses your existing GitHub CLI login. GitHub controls review requirements and whether a new commit dismisses approval. The watcher checks the latest 50 PRs per state and applies a fetched commit it can match to a merged PR.
 
-By default the watcher applies only pull requests that someone approved. Many small teams merge without a formal approval, and GitHub does not let you approve your own pull request. In that case the watcher tells you that newer commits were left alone. Run `python3 coord/git_sync.py watch --any-merge` to apply every merged pull request, approved or not. Commits pushed straight to the shared branch are never applied; use `git pull` for those. New files that Git does not track yet do not block a sync. Unsaved edits to tracked files do, and the notice names them.
+By default the watcher and `get_latest` apply merged pull requests whether or not they received an approval review. No extra flag or `include_unapproved` argument is needed. Use `watch --approved-only` or `get_latest` with `include_unapproved: false` to request the older filter. `--any-merge` remains accepted. Restart existing watchers and Claude sessions after upgrading. GitHub branch rules still control who can merge; this setting does not approve or merge PRs. Updates still require a clean shared branch and fast-forward history. Direct pushes are not selected as update targets, but commits preceding an eligible merge arrive with that merge.
 
 ## Claim work before editing
 
 A claim says what a teammate is about to change, before any edit. It is the one moment another agent can still pick different work.
 
 - **How it is made.** Claude calls the `claim_work` tool before the first edit of a task, with the task in one sentence and the files or folders it expects to change. You can also say "claim `server/` for the login work". A folder covers everything inside it.
-- **Who sees it.** Every teammate's agent gets live claims in its context on each prompt. The dashboard lists them under **Claimed work**. A teammate's first edit of a claimed file shows **CLAIMED BY A TEAMMATE** and pauses, once per file.
-- **Overlap.** If two claims cover the same files, `claim_work` replies with **OVERLAP** and names the teammate, the task and the shared files. Claude then tells you before editing.
+- **Who sees it.** Every teammate's agent gets live claims in its context on each prompt. The dashboard lists them under **Claimed work**. A teammate's first edit of a claimed file shows **CLAIMED BY A TEAMMATE** and blocks the edit until the overlap is resolved or you deliberately select advisory mode.
+- **Overlap.** If two claims cover the same files, `claim_work` replies with **NOT CLAIMED** and names the owner. The second request is not registered, so it cannot block the first owner.
 - **How it ends.** A claim runs out after 120 minutes (5 to 480 can be asked for). Say "release my claim" to end it early (`release_claim`). `list_claims` shows what is claimed.
 - **Until the branch merges.** For longer work, say "claim it until merged". In a room linked to GitHub, on a task branch, the claim then stays until that branch's pull request is merged, at most 7 days. One person holds one such claim per branch; claiming again adds files to it. The room hears about a merge when any teammate runs `get_latest` or `python3 coord/git_sync.py watch`.
 
-A claim is a notice, never a lock. The server refuses no edit because of one. The idea follows the published AgentMash protocol; the code is our own.
+The first active reservation has priority. An overlapping request is refused atomically: no new claim is saved, including the non-overlapping files in that request. Existing claims stay unchanged. Ask again with different paths or wait until the owner releases or the claim expires. Supported agent edit hooks enforce reservations; ordinary shell commands and external editors do not. On server startup, old duplicate reservations are repaired in creation order, preserving unrelated paths where possible.
 
 ## Get file overlap warnings
 
@@ -190,7 +190,7 @@ Before an edit, the hook asks the room whether a teammate changed the same file 
 | **WORK IN ANOTHER CHECKOUT** | Their change is in their own copy, not yours. Reading your file again will not show it. | Get their changes first, or agree who edits what. A merge conflict is forming. |
 | **RECENT EDIT** | Their change was in your copy when this session last read the file. | Low urgency. Check that your edit does not undo theirs. |
 
-The first three pause the edit and ask you to allow or deny it. A recent edit is a note only. If your file is exactly the version the teammate left and this session has read it since, nothing is said. After an allowed edit succeeds, further edits to that file go through until a teammate changes it again.
+The first three block the edit with `permissionDecision: deny`; claimed files also block. Claude receives the rejection before the tool writes. A recent edit is a note only. If your file exactly matches the teammate's reported version and this session has read it since, the edit warning clears (a separate live claim may still block). Resolve claims with the teammate and have their owner release them when finished. For changes in another checkout, review and integrate them first. Do not ask the agent to bypass the hook through a shell command.
 
 Example terminal notice (Claude Code controls its visual styling):
 
@@ -200,12 +200,14 @@ File: app.py
   Ali on ali/todo-delete edited this file (just now): +5/-1 lines, touching count_todos.
 They are working on this file right now, and their latest version is not in your copy.
 Next: agree with them who changes which part before you edit, or one of you will have to merge by hand.
-Choose whether to continue in Claude Code's approval prompt.
+Edit blocked before writing. Resolve the overlap before trying again.
 ```
 
 Ranking a warning by "is their change in my copy" and "are they still there" follows the published AgentMash protocol. The code is our own. Unlike AgentMash, a live edit on another laptop counts as an active collision here.
 
-To show the warning and give Claude context without requesting approval, add `"overlap": "note"` to `coord/me.json`. Normal Claude Code permissions still apply. The installer preserves this preference on upgrades. In a session with nobody at the keyboard (`claude -p`), a question cannot be answered, so the default edit is refused; use the note setting there.
+If you intentionally want advisory mode after reviewing the risk, set `"overlap": "note"` yourself in `coord/me.json`. Normal Claude permissions still apply. The agent must not change this setting to bypass a block. The installer preserves it. Default blocking works in interactive and headless sessions.
+
+Repeated notices for the same activity, file, room and session are quiet for ten minutes. A repeat of a blocked edit still returns a short denial; suppression never grants permission. New edits, teammates or changed claims produce a fresh notice. Background summary updates do not. Connection failures show an unchecked notice at most once a minute per session and server/room. Cache failures show full warnings. The bounded cache stores only hashes and timestamps in the ignored `coord/.state/` folder.
 
 If the check fails, a **CHECK UNAVAILABLE** notice says the edit was not checked. The hook does not block the edit on a connection failure. A quiet successful check means no matching recent report was found; it cannot guarantee no teammate is editing.
 
@@ -216,3 +218,12 @@ Local automated check (uses two temporary installed clients and a local server, 
 ```sh
 .venv/bin/python -B -m unittest server.test_terminal_warnings
 ```
+
+
+## One command for everyday actions
+
+After joining a project, run `python3 coord/team.py`. Choose a number to start a task, share committed work, get latest code, keep syncing, check branch status, see reserved files, release your own reservations, check setup, open the dashboard, or open Claude. Press Ctrl+C while watching to return to the menu. Sharing still requires committed changes. No command auto-commits all your files.
+
+For a setup check without opening the menu, run `python3 coord/team.py --action doctor`. It checks client files, hook registration, the agent connection, installed tools, GitHub login and server reachability. It does not prove that an agent has approved the hooks; test that in a fresh Claude session.
+
+The dashboard's **Action menu** button copies the launcher command. Browser buttons do not execute arbitrary terminal commands. The existing one-line Join command installs the menu too.

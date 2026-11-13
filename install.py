@@ -35,6 +35,7 @@ FILES_TO_COPY = [
     "coord/hooks/file_activity.py",
     "coord/mcp/server.py",
     "coord/git_sync.py",
+    "coord/team.py",
     "coord/me.example.json",
 ]
 HOOK_SCRIPTS = ("coord/hooks/contract_hook.py", "coord/hooks/file_activity.py")
@@ -207,6 +208,7 @@ def main() -> None:
     dashboard = me["server"] + "/?" + urllib.parse.urlencode({"room": me["room"]})
     print(
         f"\nTeam Contract is installed. Open your room: {dashboard}\n"
+        "  Open the action menu: python3 coord/team.py\n"
         "  Next: open a new Claude Code session in your project folder.\n"
         f"  Allow the '{TOOL_NAME}' tool when Claude Code asks.\n"
         "  If Claude Code never asks, approve it in this file:\n"

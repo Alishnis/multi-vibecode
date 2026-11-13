@@ -193,7 +193,7 @@ class OverlapPauseTest(unittest.TestCase):
 
     def test_hook_pauses_the_edit_by_default_and_can_be_set_to_a_note(self):
         paused = self.hook_output({})["hookSpecificOutput"]
-        self.assertEqual((paused["hookEventName"], paused["permissionDecision"]), ("PreToolUse", "ask"))
+        self.assertEqual((paused["hookEventName"], paused["permissionDecision"]), ("PreToolUse", "deny"))
         self.assertIn("Ali on main", paused["permissionDecisionReason"])
         self.assertIn("src/todos.py", paused["permissionDecisionReason"])
         noted = self.hook_output({"overlap": "note"})

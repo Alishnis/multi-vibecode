@@ -32,7 +32,8 @@ class AgentGitToolsTest(unittest.TestCase):
             ("start_task", {"name": " ali/todo-delete "}, ["start", "ali/todo-delete"]),
             ("share_work", {}, ["publish", "--ready"]),
             ("share_work", {"draft": True, "title": "Add  delete\nendpoint"}, ["publish", "--title=Add delete endpoint"]),
-            ("get_latest", {}, ["watch", "--once"]),
+            ("get_latest", {}, ["watch", "--once", "--any-merge"]),
+            ("get_latest", {"include_unapproved": False}, ["watch", "--once", "--approved-only"]),
             ("get_latest", {"include_unapproved": True}, ["watch", "--once", "--any-merge"]),
             ("branch_status", {}, ["status"]),
         ]

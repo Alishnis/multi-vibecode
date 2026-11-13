@@ -427,10 +427,10 @@ def report_merged_branches(me: dict, repo: str, base: str) -> None:
         pass  # claims also run out by themselves
 
 
-def merged_update(repo: str, base: str, ref: str, any_merge: bool = False) -> tuple[str, list[int]] | None:
+def merged_update(repo: str, base: str, ref: str, any_merge: bool = True) -> tuple[str, list[int]] | None:
     # Match GitHub's merge commits to the fetched branch history. An open PR
-    # or an unrelated remote tip is not a pull target. By default only pull
-    # requests that someone approved count; any_merge accepts every merged one.
+    # or an unrelated remote tip is not a pull target. Every merged PR counts
+    # by default; any_merge=False explicitly requires an approval review.
     commits = command("git", "rev-list", "--first-parent", f"HEAD..{ref}").splitlines()
     if not commits:
         return None
@@ -504,7 +504,7 @@ def report_base_status(me: dict, repo: str, base: str, ref: str) -> None:
         pass  # the files are updated; the dashboard catches up on the next status
 
 
-def watch(me: dict, interval: int, notify_only: bool, once: bool = False, any_merge: bool = False) -> None:
+def watch(me: dict, interval: int, notify_only: bool, once: bool = False, any_merge: bool = True) -> None:
     kind = "merged" if any_merge else "approved"
     if once:
         notice(f"Checking GitHub for {kind} changes…")
@@ -576,8 +576,12 @@ def main() -> None:
     watch_parser.add_argument("--interval", type=int, default=30, help="seconds between checks (minimum 15)")
     watch_parser.add_argument("--notify-only", action="store_true", help="show updates without applying them")
     watch_parser.add_argument("--once", action="store_true", help="check once, apply eligible updates, and exit")
-    watch_parser.add_argument("--any-merge", action="store_true",
-                              help="also apply merged pull requests that nobody approved")
+    merge_policy = watch_parser.add_mutually_exclusive_group()
+    merge_policy.add_argument("--any-merge", dest="any_merge", action="store_true",
+                              help="apply every merged PR (default)")
+    merge_policy.add_argument("--approved-only", dest="any_merge", action="store_false",
+                              help="only apply merged PRs with an approval review")
+    watch_parser.set_defaults(any_merge=True)
     args = parser.parse_args()
     if args.action == "watch" and args.interval < 15:
         parser.error("--interval must be at least 15 seconds")

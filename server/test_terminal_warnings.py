@@ -98,7 +98,7 @@ class TerminalWarningsTest(unittest.TestCase):
         self.assertIn("just now", warning["systemMessage"])
         self.assertIn("Next:", warning["systemMessage"])
         context = warning["hookSpecificOutput"]
-        self.assertEqual(context["permissionDecision"], "ask")
+        self.assertEqual(context["permissionDecision"], "deny")
         self.assertIn("quoted activity data", context["additionalContext"])
         # Checking alone does not count as editing and cannot suppress a retry.
         self.assertIsNotNone(self.hook("Mei"))
@@ -142,12 +142,68 @@ class TerminalWarningsTest(unittest.TestCase):
         self.configure("Mei", room="another-room")
         self.assertIsNone(self.hook("Mei"))
 
+    def test_repeated_denials_never_allow_write_and_new_edit_warns_again(self):
+        self.write("Mei", "keep my work\n")
+        at = datetime.now(timezone.utc).isoformat()
+        edit = {"author": "Ali", "branch": "ali/task", "edited_at": at}
+        self.reply = (200, {"edits": [edit]})
+        first = self.hook("Mei")
+        self.assertEqual(first["hookSpecificOutput"]["permissionDecision"], "deny")
+        retry = self.hook("Mei")
+        self.assertEqual(retry["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertNotIn("systemMessage", retry)
+        self.assertNotIn("additionalContext", retry["hookSpecificOutput"])
+        self.assertEqual((self.projects["Mei"] / "src/todos.py").read_text(), "keep my work\n")
+        edit["edited_at"] = datetime.now(timezone.utc).isoformat()
+        self.assertIn("systemMessage", self.hook("Mei"))
+
+    def test_note_dedup_allows_new_teammate_claim_session_and_expired_notice(self):
+        self.configure("Mei", overlap="note")
+        edit = {"author": "Ali", "edited_at": datetime.now(timezone.utc).isoformat()}
+        body = {"edits": [edit]}
+        self.reply = (200, body)
+        self.assertIn("systemMessage", self.hook("Mei"))
+        self.assertIsNone(self.hook("Mei"))
+        # A background summary improvement and age display do not create news.
+        edit["summary"] = "A better summary"
+        self.assertIsNone(self.hook("Mei"))
+        body["edits"].append({**edit, "author": "Dana"})
+        self.assertIn("systemMessage", self.hook("Mei"))
+        body["edits"].pop()
+        self.assertIsNone(self.hook("Mei"))
+        body["claims"] = [{"id": 1, "author": "Dana", "task": "New task", "paths": ["src"],
+                           "minutes_left": 10}]
+        self.assertIn("systemMessage", self.hook("Mei"))
+        self.assertIsNone(self.hook("Mei"))
+        self.assertIn("systemMessage", self.hook("Mei", session_id="new-session"))
+        import sqlite3
+        with sqlite3.connect(self.projects["Mei"] / "coord/.state/notices.sqlite") as db:
+            db.execute("UPDATE notices SET shown=0")
+        self.assertIn("systemMessage", self.hook("Mei"))
+
+    def test_cache_failure_keeps_denial_and_note_mode_does_not_hide_new_block(self):
+        self.reply = (200, {"edits": [{"author": "Ali", "edited_at": datetime.now(timezone.utc).isoformat()}]})
+        self.configure("Mei", overlap="note")
+        self.hook("Mei")
+        self.configure("Mei")
+        self.assertIn("systemMessage", self.hook("Mei"))
+        cache = self.projects["Mei"] / "coord/.state/notices.sqlite"
+        cache.write_text("broken database")
+        warning = self.hook("Mei")
+        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn("systemMessage", warning)
+
+    def test_outage_notice_is_throttled_across_files(self):
+        self.reply = (503, {})
+        self.assertIn("CHECK UNAVAILABLE", self.hook("Mei")["systemMessage"])
+        self.assertIsNone(self.hook("Mei", path="another.py"))
+
     def test_unavailable_or_malformed_check_is_visible_and_does_not_block(self):
         for reply in ((503, {"detail": "sleeping"}), (409, {"detail": "wrong repo"}),
                       (200, {}), (200, {"edits": [None]})):
             with self.subTest(reply=reply):
                 self.reply = reply
-                warning = self.hook("Mei")
+                warning = self.hook("Mei", session_id=str(reply))
                 self.assertIn("CHECK UNAVAILABLE", warning["systemMessage"])
                 self.assertNotIn("permissionDecision", warning["hookSpecificOutput"])
         self.configure("Mei", server="http://127.0.0.1:9")
@@ -234,8 +290,8 @@ class TerminalWarningsTest(unittest.TestCase):
         warning = self.hook("Mei")
         self.assertIn("[Team Contract: CLAIMED BY A TEAMMATE]", warning["systemMessage"])
         self.assertIn('Ali claimed this for "Add delete for todos" (119 min left).', warning["systemMessage"])
-        self.assertIn("not a lock", warning["systemMessage"])
-        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "ask")
+        self.assertIn("first active reservation", warning["systemMessage"])
+        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "deny")
         self.assertIn('"task": "Add delete for todos"', warning["hookSpecificOutput"]["additionalContext"])
         self.hook("Mei", "PostToolUse")                               # Mei went ahead
         self.assertIsNone(self.hook("Mei"))                           # so she is not asked again
@@ -263,7 +319,7 @@ class TerminalWarningsTest(unittest.TestCase):
         self.assertIn("[Team Contract: WORK IN ANOTHER CHECKOUT]", warning["systemMessage"])
         self.assertIn("12 min ago", warning["systemMessage"])
         self.assertIn("merge conflict is forming", warning["systemMessage"])
-        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "ask")
+        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "deny")
 
     def test_outdated_read_when_their_version_is_in_my_copy_until_i_read_it(self):
         for name in ("Ali", "Mei"):                       # Mei already has Ali's exact file, say after a pull
@@ -273,7 +329,7 @@ class TerminalWarningsTest(unittest.TestCase):
         warning = self.hook("Mei")
         self.assertIn("[Team Contract: OUTDATED READ]", warning["systemMessage"])
         self.assertIn("read the file again", warning["systemMessage"])
-        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "ask")
+        self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "deny")
         requests_before = len(self.requests)
         self.assertIsNone(self.hook("Mei", "PostToolUse", tool="Read"))
         self.assertEqual(len(self.requests), requests_before)   # a read is remembered locally, not sent

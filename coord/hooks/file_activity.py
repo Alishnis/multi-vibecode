@@ -25,8 +25,9 @@ There are four kinds of overlap, strongest first:
 A fifth notice, CLAIMED BY A TEAMMATE, appears when nobody has edited the file
 yet but a teammate announced (claim_work) that they are about to.
 
-All but a recent edit pause the edit and ask the person at the keyboard. A recent
-edit only leaves a note. Set "overlap": "note" in coord/me.json to never pause.
+All but a recent edit deny the tool call before it writes. A recent edit only
+leaves a note. Set "overlap": "note" yourself after reviewing the risk to use
+advisories. Repeated notices are quiet for ten minutes; denials still apply.
 
 The idea of ranking overlaps by "is their change in my working copy" and "are
 they still there" follows AgentMash's published protocol (MIT licence). The
@@ -39,6 +40,7 @@ import json
 import re
 import secrets
 import socket
+import sqlite3
 import subprocess
 import sys
 import urllib.request
@@ -52,6 +54,7 @@ sys.path.insert(0, str(ROOT / "coord"))
 TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 ENDPOINTS = {"PreToolUse": "/files/check", "PostToolUse": "/files/edits"}
 STATE_DIR = ROOT / "coord/.state"                       # kept out of git by the installer
+NOTICE_SECONDS = 600
 CHECKOUT_KEY = Path.home() / ".team-contract/checkout-key"
 ACTIVE_MINUTES = 5            # a change this fresh, by someone still working, is a live collision
 HASH_LIMIT_BYTES = 2_000_000  # larger files are not fingerprinted
@@ -369,7 +372,7 @@ def assess(event: dict, path: str, result: dict) -> list[dict]:
 
 
 ADVICE = {
-    "active": ("They are working on this file right now, and their latest version is not in your copy.",
+    "active": ("They edited this file recently and their agent was recently active. Your copy differs.",
                "Next: agree with them who changes which part before you edit, or one of you will have to merge by hand."),
     "stale": ("Their change is already in your copy of this file, but this session read the file before it.",
               "Next: read the file again and base the edit on what is there now, or the edit may undo their change."),
@@ -379,7 +382,7 @@ ADVICE = {
                "Low urgency: they have likely moved on. Check that your edit does not undo theirs."),
     "claimed": ("A teammate announced that they are about to work on this file. They have not reported an edit yet.",
                 "Next: pick work outside their claim, or agree with them who changes which part. "
-                "A claim is stated intent, not a lock."),
+                "The first active reservation has priority."),
 }
 
 
@@ -403,7 +406,7 @@ def message(path: str, assessed: list[dict], ask: bool, claims: list[dict] = ())
     if len(assessed) > 3:
         lines.append(f"  And {len(assessed) - 3} more teammates.")
     lines += ADVICE[top]
-    lines.append("Choose whether to continue in Claude Code's approval prompt." if ask else
+    lines.append("Edit blocked before writing. Resolve the overlap before trying again." if ask else
                  "Warning only: Claude receives this notice before the edit.")
     return "\n".join(lines)
 
@@ -435,9 +438,59 @@ def warning_output(path: str, assessed: list[dict], ask: bool, claims: list[dict
     )
     specific = {"hookEventName": "PreToolUse", "additionalContext": context}
     if ask:
-        specific.update(permissionDecision="ask", permissionDecisionReason=warning)
+        specific.update(permissionDecision="deny", permissionDecisionReason=warning +
+                        "\nStop and explain the overlap to the user. Do not bypass this block with "
+                        "Bash, another tool, a fake edit report, or changes to hook settings.")
     # Never return "allow": normal Claude Code permissions still apply in note mode.
     return {"systemMessage": warning, "hookSpecificOutput": specific}
+
+
+def quiet_notice(event: dict, me: dict, path: str, edits: list[dict], claims: list[dict],
+                 output: dict, *, unavailable: bool = False) -> dict | None:
+    """Suppress repeated display/context, never a blocking decision or a new signal.
+
+    Cache only opaque hashes. SQLite serializes parallel hook calls. A missing
+    session or a broken cache shows the full warning, preserving the decision.
+    """
+    session = session_tag(event)
+    if not session:
+        return output
+    specific = output["hookSpecificOutput"]
+    blocking = specific.get("permissionDecision") == "deny"
+    scope = [me.get("server"), me.get("room"), me.get("name"), session,
+             "unavailable" if unavailable else path, blocking]
+    signals = [["unavailable"]] if unavailable else (
+        [["edit", e.get("author"), e.get("edited_at"), e.get("checkout_id"),
+          e.get("content_hash"), e.get("level")] for e in edits] +
+        [["claim", c.get("id"), c.get("author"), c.get("created_at"),
+          c.get("expires_at"), c.get("task"), c.get("paths")] for c in claims]
+    )
+    keys = [hashlib.sha256(json.dumps([scope, signal], sort_keys=True).encode()).hexdigest()
+            for signal in signals]
+    at = datetime.now(timezone.utc).timestamp()
+    ttl = 60 if unavailable else NOTICE_SECONDS
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(STATE_DIR / "notices.sqlite", timeout=0.1) as db:
+            db.execute("CREATE TABLE IF NOT EXISTS notices (key TEXT PRIMARY KEY, shown REAL)")
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM notices WHERE shown < ?", (at - NOTICE_SECONDS,))
+            fresh = any((row := db.execute("SELECT shown FROM notices WHERE key=?", (key,)).fetchone())
+                        is None or at - row[0] >= ttl for key in keys)
+            if fresh:
+                db.executemany("INSERT OR REPLACE INTO notices VALUES (?, ?)", [(key, at) for key in keys])
+                db.execute("DELETE FROM notices WHERE key NOT IN "
+                           "(SELECT key FROM notices ORDER BY shown DESC LIMIT 2000)")
+                return output
+    except (OSError, sqlite3.Error):
+        return output
+    if blocking:
+        return {"hookSpecificOutput": {
+            "hookEventName": "PreToolUse", "permissionDecision": "deny",
+            "permissionDecisionReason": f"[Team Contract] Edit still blocked for {label(path)}. "
+            "The previously reported overlap is unresolved. Stop; do not retry or bypass the hook.",
+        }}
+    return None
 
 
 def unavailable_output() -> dict:
@@ -493,7 +546,8 @@ def run(event: dict) -> dict | None:
     if name == "PreToolUse":
         assessed, claims = assess(event, path, result), checked_claims(result)
         if assessed or claims:
-            return warning_output(path, assessed, ask=me.get("overlap") != "note", claims=claims)
+            output = warning_output(path, assessed, ask=me.get("overlap") != "note", claims=claims)
+            return quiet_notice(event, me, path, assessed, claims, output)
     return None
 
 
@@ -506,6 +560,13 @@ if __name__ == "__main__":
             print(json.dumps(output))
     except (OSError, ValueError, KeyError, TypeError, RuntimeError, ImportError) as error:
         if isinstance(event, dict) and event.get("hook_event_name") == "PreToolUse":
-            print(json.dumps(unavailable_output()))
+            output = unavailable_output()
+            try:
+                me = json.loads((ROOT / "coord/me.json").read_text())
+                output = quiet_notice(event, me, "", [], [], output, unavailable=True)
+            except (OSError, ValueError, TypeError):
+                pass
+            if output:
+                print(json.dumps(output))
         else:
             print(f"Team Contract file report unavailable ({type(error).__name__}).", file=sys.stderr)

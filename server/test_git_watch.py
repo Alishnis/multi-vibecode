@@ -1,4 +1,6 @@
 import tempfile
+import json
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -7,6 +9,21 @@ from coord import git_sync
 
 
 class GitWatchTest(unittest.TestCase):
+    def test_cli_defaults_to_every_merge_and_allows_explicit_approval_filter(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "coord").mkdir()
+            (root / "coord/me.json").write_text(json.dumps({"name": "Mei", "room": "test"}))
+            for flags, expected in (([], True), (["--any-merge"], True), (["--approved-only"], False)):
+                with self.subTest(flags=flags), patch.object(git_sync, "PROJECT", root), \
+                        patch.object(sys, "argv", ["git_sync.py", "watch", "--once", *flags]), \
+                        patch.object(git_sync, "command", return_value=str(root)), \
+                        patch.object(git_sync, "origin_repository", return_value="example/todos"), \
+                        patch.object(git_sync, "linked_base", return_value="main"), \
+                        patch.object(git_sync, "watch") as watch:
+                    git_sync.main()
+                    self.assertEqual(watch.call_args.args[-1], expected)
+
     def test_one_check_applies_approved_merge_and_exits_without_sleep(self):
         with patch.object(git_sync, "origin_repository", return_value="example/todos"), \
                 patch.object(git_sync, "linked_base", return_value="main"), \
@@ -46,12 +63,13 @@ class GitWatchTest(unittest.TestCase):
         merged = {**approved, "mergeCommit": {"oid": target}}
         with patch.object(git_sync, "pull_requests", return_value=[approved]):
             self.assertEqual(git_sync.approved_requests("example/todos", "main"), {7: target})
-            self.assertIsNone(git_sync.merged_update("example/todos", "main", "synthetic-merge"))
+            self.assertIsNone(git_sync.merged_update("example/todos", "main", "synthetic-merge", any_merge=False))
         self.assertEqual(git("rev-parse", "HEAD"), original)
         with patch.object(git_sync, "pull_requests", return_value=[
             {**merged, "reviewDecision": "REVIEW_REQUIRED"},
         ]):
-            self.assertIsNone(git_sync.merged_update("example/todos", "main", "synthetic-merge"))
+            self.assertIsNone(git_sync.merged_update("example/todos", "main", "synthetic-merge", any_merge=False))
+            self.assertEqual(git_sync.merged_update("example/todos", "main", "synthetic-merge"), (target, [7]))
         with patch.object(git_sync, "pull_requests", return_value=[merged]):
             self.assertEqual(git_sync.merged_update("example/todos", "main", "synthetic-merge"), (target, [7]))
 
@@ -108,7 +126,7 @@ class GitWatchTest(unittest.TestCase):
                 git_sync.watch({}, 30, notify_only=True)
         messages = [call.args[0] for call in output.call_args_list]
         self.assertEqual(sum("PR #7 approved" in message for message in messages), 1)
-        self.assertEqual(sum("Approved PRs merged" in message for message in messages), 1)
+        self.assertEqual(sum("Merged PRs merged" in message for message in messages), 1)
         update.assert_not_called()
 
 
