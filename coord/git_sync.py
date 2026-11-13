@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -170,7 +171,7 @@ def publish(repo: str, branch: str, base: str, ahead: int, title: str | None) ->
     return {"number": int(url.rstrip("/").rsplit("/", 1)[1]), "url": url}
 
 
-def sync(me: dict, repo: str, action: str, title: str | None) -> None:
+def linked_base(me: dict, repo: str) -> str:
     linked = linked_repository(me)
     if not linked:
         raise ValueError("The room has no repository. Ask the room owner to run git_sync.py link.")
@@ -178,17 +179,28 @@ def sync(me: dict, repo: str, action: str, title: str | None) -> None:
         raise ValueError("Origin does not match the room's linked repository.")
     base = linked["base_branch"]
     command("git", "check-ref-format", f"refs/heads/{base}")
+    return base
+
+
+def fetch_base(base: str) -> str:
+    ref = f"refs/remotes/origin/{base}"
+    command(
+        "git", "fetch", "--no-tags", "--no-recurse-submodules", "origin",
+        f"+refs/heads/{base}:{ref}",
+    )
+    return ref
+
+
+def sync(me: dict, repo: str, action: str, title: str | None) -> None:
+    base = linked_base(me, repo)
     branch = command("git", "branch", "--show-current")
     if not branch:
         raise ValueError("Switch to a named branch before checking or publishing.")
     if action == "publish" and branch == base:
         raise ValueError(f"Switch to a task branch before publishing. {base} is the review target.")
-    command(
-        "git", "fetch", "--no-tags", "--no-recurse-submodules", "origin",
-        f"+refs/heads/{base}:refs/remotes/origin/{base}",
-    )
+    ref = fetch_base(base)
     behind, ahead = map(int, command(
-        "git", "rev-list", "--left-right", "--count", f"refs/remotes/origin/{base}...HEAD",
+        "git", "rev-list", "--left-right", "--count", f"{ref}...HEAD",
     ).split())
     if action == "publish":
         pr = publish(repo, branch, base, ahead, title)
@@ -208,6 +220,94 @@ def sync(me: dict, repo: str, action: str, title: str | None) -> None:
     print("Status sent to the Team Contract dashboard.")
 
 
+def pull_requests(repo: str, base: str, state: str, fields: str) -> list[dict]:
+    return json.loads(command(
+        "gh", "pr", "list", "--repo", f"github.com/{repo}", "--base", base,
+        "--state", state, "--limit", "50", "--json", fields,
+    ))
+
+
+def has_approval(pr: dict) -> bool:
+    decision = pr.get("reviewDecision")
+    if decision:
+        return decision == "APPROVED"
+    # GitHub can omit the aggregate decision on branches without required reviews.
+    reviews = {review["state"] for review in (pr.get("latestReviews") or [])}
+    return "APPROVED" in reviews and "CHANGES_REQUESTED" not in reviews
+
+
+def approved_requests(repo: str, base: str) -> dict[int, str]:
+    approved = pull_requests(
+        repo, base, "open", "number,headRefOid,isDraft,reviewDecision,latestReviews",
+    )
+    return {
+        pr["number"]: pr["headRefOid"] for pr in approved
+        if not pr["isDraft"] and has_approval(pr)
+    }
+
+
+def merged_update(repo: str, base: str, ref: str) -> tuple[str, list[int]] | None:
+    # Match GitHub's merge commits to the fetched branch history. An open PR
+    # or an unrelated remote tip is not a pull target.
+    commits = command("git", "rev-list", "--first-parent", f"HEAD..{ref}").splitlines()
+    if not commits:
+        return None
+    merged = pull_requests(repo, base, "merged", "number,mergeCommit,reviewDecision,latestReviews")
+    by_commit = {
+        pr["mergeCommit"]["oid"]: pr["number"] for pr in merged
+        if pr.get("mergeCommit") and has_approval(pr)
+    }
+    matches = [(commit, by_commit[commit]) for commit in commits if commit in by_commit]
+    if not matches:
+        return None
+    return matches[0][0], [number for _, number in reversed(matches)]
+
+
+def update_checkout(base: str, target: str) -> str:
+    if command("git", "branch", "--show-current") != base:
+        return f"Switch to {base} when ready to sync."
+    for operation in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply", "sequencer", "BISECT_START"):
+        if (PROJECT / command("git", "rev-parse", "--git-path", operation)).exists():
+            return "Finish your current Git operation before syncing."
+    if command("git", "status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"):
+        return "Local changes detected. Commit or stash them before syncing."
+    ahead, behind = map(int, command(
+        "git", "rev-list", "--left-right", "--count", f"HEAD...{target}",
+    ).split())
+    if ahead or not behind:
+        return f"Local {base} cannot be fast-forwarded. Review it before syncing."
+    command("git", "merge", "--ff-only", "--no-autostash", "--no-overwrite-ignore", target)
+    return f"Updated local {base} to {target[:12]}."
+
+
+def watch(me: dict, interval: int, notify_only: bool) -> None:
+    print("Watching the linked repository. Press Ctrl+C to stop.", flush=True)
+    approvals: set[tuple[str, str, int, str]] = set()
+    last_status = ""
+    while True:
+        try:
+            repo = origin_repository()
+            base = linked_base(me, repo)
+            current = {(repo, base, number, head) for number, head in approved_requests(repo, base).items()}
+            for _, _, number, _ in sorted(current - approvals):
+                print(f"[Team Contract] PR #{number} approved. Waiting for merge. "
+                      f"https://github.com/{repo}/pull/{number}", flush=True)
+            approvals = current
+            update = merged_update(repo, base, fetch_base(base))
+            status = ""
+            if update:
+                target, numbers = update
+                prs = ", ".join(f"#{number}" for number in numbers)
+                result = "Run git_sync.py watch without --notify-only to sync." if notify_only else update_checkout(base, target)
+                status = f"Approved PRs merged into {base}: {prs}. {result}"
+        except (OSError, ValueError, KeyError) as error:
+            status = f"Watch check failed: {error}"
+        if status and status != last_status:
+            print(f"[Team Contract] {status}", flush=True)
+        last_status = status
+        time.sleep(interval)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="action", required=True)
@@ -217,7 +317,12 @@ def main() -> None:
     subparsers.add_parser("status", help="fetch the base branch and report branch status")
     publish_parser = subparsers.add_parser("publish", help="push committed work and open or reuse its PR")
     publish_parser.add_argument("--title", help="title for a new draft PR")
+    watch_parser = subparsers.add_parser("watch", help="notify about approved PRs and sync after merge")
+    watch_parser.add_argument("--interval", type=int, default=30, help="seconds between checks (minimum 15)")
+    watch_parser.add_argument("--notify-only", action="store_true", help="show updates without applying them")
     args = parser.parse_args()
+    if args.action == "watch" and args.interval < 15:
+        parser.error("--interval must be at least 15 seconds")
     try:
         me = json.loads((PROJECT / "coord/me.json").read_text())
         if command("git", "rev-parse", "--show-toplevel") != str(PROJECT):
@@ -226,10 +331,15 @@ def main() -> None:
             create_repository(me, args.repository)
         elif args.action == "link":
             link(me, origin_repository(), approval_token())
+        elif args.action == "watch":
+            linked_base(me, origin_repository())
+            watch(me, args.interval, args.notify_only)
         else:
             sync(me, origin_repository(), args.action, getattr(args, "title", None))
     except (OSError, ValueError, KeyError) as error:
         sys.exit(f"Stopped: {error}")
+    except KeyboardInterrupt:
+        print("\nStopped watching.")
 
 
 if __name__ == "__main__":

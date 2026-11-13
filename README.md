@@ -90,7 +90,21 @@ Run the updated installer at the root of each teammate's clone. The optional Git
 3. **Push and open a draft PR.** Run `python3 coord/git_sync.py publish --title "Add todo API"`. The command pushes your existing commits and opens a draft PR. Run it again after later commits to push to the same branch and reuse the open PR.
 4. **Check for new base-branch commits.** Run `python3 coord/git_sync.py status` to fetch the base branch and report your current branch, open PR, and ahead/behind counts in the dashboard. The timestamp shows when each teammate last checked. After a human reviews and merges a PR, teammates update their own checkouts when ready.
 
-The dashboard gets repository and branch metadata only. GitHub handles the source code, credentials, and PRs. The publish command is the push entry point for automatic draft creation. Plain `git push` still behaves normally. The CLI has no pull, merge, force-push, or automatic commit step.
+The dashboard gets repository and branch metadata only. GitHub handles the source code, credentials, and PRs. The publish command is the push entry point for automatic draft creation. Plain `git push` still behaves normally.
+
+### Get approval notices and sync after merge
+
+In each linked clone, rerun the installer and start this in a separate terminal:
+
+```sh
+python3 coord/git_sync.py watch
+```
+
+Each running watcher checks GitHub about every 30 seconds. It prints a notice when it sees an approved open PR. After someone merges that PR into the room's base branch, the watcher prints another notice and fast-forwards the local base branch to the detected merge commit if the checkout is clean. Task branches, local edits and diverged history are left alone. Use a separate clean base-branch clone if you want it to update while you work elsewhere. The watcher never merges the PR on GitHub.
+
+Before testing automatic updates, run `git status --short` in the receiving clone. The installer can add shared project files that show up as local changes. Commit those shared setup files to the repository first, then use a clone that already has that commit. Leave `coord/me.json` and `.claude/settings.local.json` local and ignored.
+
+Use `watch --notify-only` to get the same terminal notices without applying changes. Press Ctrl+C to stop. The command is opt-in on every laptop and runs while the terminal stays open. It uses your existing GitHub CLI login. Approve from a different GitHub account than the PR author when testing with two clones. GitHub controls review requirements and whether a new commit dismisses approval. The watcher checks the latest 50 PRs per state and only applies a fetched commit it can match to an approved, merged PR.
 
 ## Get file overlap warnings
 
