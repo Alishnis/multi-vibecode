@@ -30,6 +30,9 @@ INSTRUCTIONS = (
     "API endpoint and what it returns; naming a data field or table; choosing a "
     "port; and setting a project convention. Do this without being asked. "
     "Record one decision per call, as one short factual sentence. "
+    "If the user asks for something that contradicts the contract, still call "
+    "record_decision with what they asked for: the server logs the conflict so "
+    "the whole team sees it. Then stop and ask the user how to proceed. "
     "Do not record a decision that is already in the contract, and do not record "
     "small local details such as a helper function's name."
 )
@@ -117,7 +120,7 @@ def record_decision(arguments: dict) -> tuple[str, bool]:
         )
 
     conflict = reply.get("conflict")
-    if conflict:  # filled in by the server from slice 4 onward
+    if conflict:
         return (
             "CONFLICT with the team contract. "
             f"{conflict.get('explanation', '')} "
@@ -126,7 +129,23 @@ def record_decision(arguments: dict) -> tuple[str, bool]:
             "Stop. Do not write code for this decision. Tell the user about the "
             "conflict and ask whether to follow the team's decision or change it."
         ), False
-    return f"Recorded in the team contract: [{category}] {text} (by {name}).", False
+
+    duplicate = reply.get("duplicate")
+    if duplicate:
+        return (
+            f"Already in the team contract: \"{duplicate.get('text', '')}\" "
+            f"(by {duplicate.get('author', 'a teammate')}). Nothing new was recorded. "
+            "Follow the existing decision."
+        ), False
+
+    note = ""
+    check = str(reply.get("check", ""))
+    if check.startswith("skipped"):
+        note = (
+            f" Note: the conflict check did not run ({check}), so this decision "
+            "was not compared with the rest of the contract."
+        )
+    return f"Recorded in the team contract: [{category}] {text} (by {name}).{note}", False
 
 
 def handle(message: dict) -> dict | None:

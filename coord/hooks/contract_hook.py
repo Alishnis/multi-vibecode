@@ -45,8 +45,11 @@ def main() -> None:
     print(contract["text"])
     if contract["decisions"]:
         print(
-            "These decisions apply to this project. A request that contradicts "
-            "one of them should be raised with the user before any code is written."
+            "These decisions apply to this project. When a request contradicts one "
+            "of them, the requested decision is first submitted with the "
+            "team-contract record_decision tool, so that the conflict is logged for "
+            "the whole team, and then the conflict is raised with the user before "
+            "any code is written."
         )
     # Repeated on every prompt, because agents forget instructions given once.
     print(
