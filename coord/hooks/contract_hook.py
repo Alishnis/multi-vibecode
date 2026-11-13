@@ -35,7 +35,8 @@ def main() -> None:
     except (json.JSONDecodeError, KeyError, AttributeError) as error:
         give_up(f"{ME_FILE} is not valid: {error!r}")
 
-    url = f"{server}/contract?" + urllib.parse.urlencode({"room": room})
+    query = {"room": room, "name": me.get("name", "")}  # the name marks this person as active
+    url = f"{server}/contract?" + urllib.parse.urlencode(query)
     try:
         with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as response:
             contract = json.load(response)

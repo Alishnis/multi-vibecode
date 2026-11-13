@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team contract</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --text: #14171c;
+    --muted: #5d6673;
+    --line: #dfe3e8;
+    --accent: #1f6feb;
+    --ok: #1a7f4b;
+    --danger: #c62828;
+    --danger-bg: #fdecec;
+    --danger-line: #f1b0b0;
+    --fresh: #fff6cf;
+    --tag-stack: #1f6feb;
+    --tag-api: #7b3fc4;
+    --tag-data: #0b7c86;
+    --tag-convention: #a35c00;
+    --tag-other: #5d6673;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216;
+      --panel: #181c22;
+      --text: #eef1f5;
+      --muted: #9aa4b2;
+      --line: #2b313a;
+      --accent: #6aa5ff;
+      --ok: #4cc38a;
+      --danger: #ff6b6b;
+      --danger-bg: #2a1517;
+      --danger-line: #6b2a2d;
+      --fresh: #3a3413;
+      --tag-stack: #6aa5ff;
+      --tag-api: #b48cf2;
+      --tag-data: #4fc3cf;
+      --tag-convention: #e0a040;
+      --tag-other: #9aa4b2;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { font-size: 18px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.4;
+  }
+  .page { max-width: 1280px; margin: 0 auto; padding: 24px 24px 40px; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px;
+    padding-bottom: 20px; border-bottom: 1px solid var(--line); margin-bottom: 24px;
+  }
+  h1 { font-size: 1.7rem; margin: 0; letter-spacing: -0.01em; }
+  .room { color: var(--muted); font-size: 1rem; }
+  .room b { color: var(--text); font-weight: 600; }
+  .people { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+  .person {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--panel); font-weight: 600;
+  }
+  .person small { font-weight: 400; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); flex: none; }
+  .person.active .dot { background: var(--ok); }
+  .live { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.9rem; }
+  .live .dot { background: var(--ok); animation: pulse 2s infinite; }
+  .live.down { color: var(--danger); font-weight: 600; }
+  .live.down .dot { background: var(--danger); animation: none; }
+  @keyframes pulse { 50% { opacity: 0.35; } }
+
+  h2 {
+    font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin: 0 0 12px; font-weight: 700;
+  }
+  h2 .count { color: var(--text); margin-left: 6px; }
+
+  /* Conflicts: the most important thing on the page. */
+  #conflicts { margin-bottom: 28px; }
+  #conflicts h2 { color: var(--danger); }
+  .conflict {
+    background: var(--danger-bg); border: 2px solid var(--danger-line);
+    border-left: 10px solid var(--danger); border-radius: 12px;
+    padding: 18px 22px; margin-bottom: 12px;
+  }
+  .conflict .top { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .conflict .badge {
+    background: var(--danger); color: #fff; font-weight: 800; font-size: 0.85rem;
+    letter-spacing: 0.08em; padding: 3px 10px; border-radius: 6px;
+  }
+  .conflict .why { font-size: 1.3rem; font-weight: 700; margin: 0 0 14px; }
+  .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .side { background: var(--panel); border: 1px solid var(--danger-line); border-radius: 8px; padding: 12px 14px; }
+  .side .who { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .side .what { font-size: 1.05rem; font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: 3fr 2fr; gap: 24px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+
+  .decision {
+    display: grid; grid-template-columns: 112px 1fr; gap: 14px; align-items: baseline;
+    padding: 12px 10px; border-bottom: 1px solid var(--line); border-radius: 8px;
+  }
+  .decision:last-child { border-bottom: 0; }
+  .tag {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 3px 0; text-align: center; border-radius: 6px; border: 1.5px solid currentColor;
+  }
+  .tag.stack { color: var(--tag-stack); }
+  .tag.api { color: var(--tag-api); }
+  .tag.data { color: var(--tag-data); }
+  .tag.convention { color: var(--tag-convention); }
+  .tag.other { color: var(--tag-other); }
+  .decision .what { font-size: 1.15rem; font-weight: 600; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: 0.85rem; font-weight: 400; margin-top: 2px; }
+
+  .event { padding: 10px 10px; border-bottom: 1px solid var(--line); border-radius: 8px; font-size: 0.95rem; overflow-wrap: anywhere; }
+  .event:last-child { border-bottom: 0; }
+  .event b { font-weight: 700; }
+  .event.bad { color: var(--danger); }
+  .event.bad .meta { color: var(--danger); opacity: 0.8; }
+
+  .empty { color: var(--muted); padding: 18px 10px; }
+  .fresh { animation: fresh 5s ease-out; }
+  @keyframes fresh { 0%, 40% { background: var(--fresh); } 100% { background: transparent; } }
+  .conflict.fresh { animation: shake 0.5s ease-in-out; }
+  @keyframes shake { 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(5px); } }
+  @media (prefers-reduced-motion: reduce) { .fresh, .conflict.fresh, .live .dot { animation: none; } }
+
+  footer { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; margin-top: 24px; color: var(--muted); font-size: 0.85rem; }
+  footer .warn { color: var(--danger); font-weight: 600; }
+  footer button {
+    margin-left: auto; font: inherit; color: var(--muted); background: none;
+    border: 1px solid var(--line); border-radius: 8px; padding: 5px 12px; cursor: pointer;
+  }
+  footer button:hover { color: var(--danger); border-color: var(--danger); }
+
+  @media (max-width: 860px) {
+    .grid, .sides { grid-template-columns: 1fr; }
+    .people { margin-left: 0; }
+    .decision { grid-template-columns: 1fr; gap: 6px; }
+    .tag { justify-self: start; padding: 3px 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Team contract</h1>
+    <span class="room">room <b id="room"></b></span>
+    <span class="live" id="live"><span class="dot"></span><span id="live-text">connecting</span></span>
+    <div class="people" id="people"></div>
+  </header>
+
+  <section id="conflicts" hidden>
+    <h2>Conflicts <span class="count" id="conflict-count"></span></h2>
+    <div id="conflict-list"></div>
+  </section>
+
+  <div class="grid">
+    <section class="panel">
+      <h2>Decisions the team has made <span class="count" id="decision-count"></span></h2>
+      <ul id="decisions"></ul>
+    </section>
+    <section class="panel">
+      <h2>Activity</h2>
+      <ul id="activity"></ul>
+    </section>
+  </div>
+
+  <footer>
+    <span id="checker"></span>
+    <button id="reset" type="button">Reset room</button>
+  </footer>
+</div>
+
+<script>
+  // The room comes from the address: http://localhost:8000/?room=demo
+  const room = new URLSearchParams(location.search).get("room") || "demo";
+  const ACTIVE_SECONDS = 600;   // a person counts as active for 10 minutes after their last prompt
+  const MAX_EVENTS = 30;
+
+  const $ = (id) => document.getElementById(id);
+  $("room").textContent = room;
+
+  let lastSignature = null;   // what the lists looked like at the last redraw
+  let seen = null;            // items already shown; null until the first load
+
+  // Build an element with text. textContent is used everywhere, so text that
+  // an agent recorded can never be run as HTML.
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  function ago(seconds) {
+    if (seconds < 10) return "just now";
+    if (seconds < 60) return `${Math.floor(seconds)}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    return `${Math.floor(seconds / 3600)} h ago`;
+  }
+
+  // A span whose text is refreshed every second without redrawing the lists.
+  function timeSpan(created) {
+    const span = el("span");
+    span.dataset.time = created;
+    return span;
+  }
+
+  function updateTimes(serverNow) {
+    const now = new Date(serverNow).getTime();
+    for (const span of document.querySelectorAll("[data-time]")) {
+      span.textContent = ago((now - new Date(span.dataset.time).getTime()) / 1000);
+    }
+  }
+
+  function renderPeople(people) {
+    const box = $("people");
+    box.replaceChildren();
+    for (const person of people) {
+      const active = person.seconds_ago < ACTIVE_SECONDS;
+      const chip = el("span", "person" + (active ? " active" : ""));
+      chip.append(el("span", "dot"), el("span", null, person.name));
+      chip.append(el("small", null, active ? "active" : ago(person.seconds_ago)));
+      box.append(chip);
+    }
+  }
+
+  function renderLists(state) {
+    const isFresh = (key) => seen !== null && !seen.has(key);
+    const nowSeen = new Set();
+
+    // Conflicts
+    const conflictList = $("conflict-list");
+    conflictList.replaceChildren();
+    for (const c of state.conflicts) {
+      const key = "c" + c.id;
+      nowSeen.add(key);
+      const card = el("div", "conflict" + (isFresh(key) ? " fresh" : ""));
+      const top = el("div", "top");
+      top.append(el("span", "badge", "CONFLICT"));
+      const when = el("span", "meta");
+      when.append(timeSpan(c.created_at));
+      top.append(when);
+      const sides = el("div", "sides");
+      const wanted = el("div", "side");
+      wanted.append(el("div", "who", `${c.new_author}'s AI wanted`), el("div", "what", c.new_text));
+      const decided = el("div", "side");
+      decided.append(el("div", "who", `Team already decided (${c.existing_author})`),
+                     el("div", "what", c.existing_text || "(see contract)"));
+      sides.append(wanted, decided);
+      card.append(top, el("p", "why", c.explanation), sides);
+      conflictList.append(card);
+    }
+    $("conflicts").hidden = state.conflicts.length === 0;
+    $("conflict-count").textContent = state.conflicts.length || "";
+
+    // Decisions, newest first
+    const decisions = $("decisions");
+    decisions.replaceChildren();
+    for (const d of [...state.decisions].reverse()) {
+      const key = "d" + d.id;
+      nowSeen.add(key);
+      const row = el("li", "decision" + (isFresh(key) ? " fresh" : ""));
+      const body = el("div");
+      const meta = el("div", "meta", `${d.author}'s AI · `);
+      meta.append(timeSpan(d.created_at));
+      body.append(el("div", "what", d.text), meta);
+      row.append(el("span", "tag " + d.category, d.category), body);
+      decisions.append(row);
+    }
+    if (state.decisions.length === 0) {
+      decisions.append(el("li", "empty", "No decisions yet. The first decision an AI makes will appear here."));
+    }
+    $("decision-count").textContent = state.decisions.length || "";
+
+    // Activity: decisions and conflicts together, newest first
+    const events = [
+      ...state.decisions.map((d) => ({ key: "d" + d.id, time: d.created_at, bad: false, who: d.author, text: `recorded: ${d.text}` })),
+      ...state.conflicts.map((c) => ({ key: "c" + c.id, time: c.created_at, bad: true, who: c.new_author, text: `was stopped: ${c.new_text}` })),
+    ].sort((a, b) => (a.time < b.time ? 1 : a.time > b.time ? -1 : 0)).slice(0, MAX_EVENTS);
+    const activity = $("activity");
+    activity.replaceChildren();
+    for (const e of events) {
+      const row = el("li", "event" + (e.bad ? " bad" : "") + (isFresh(e.key) ? " fresh" : ""));
+      const line = el("div");
+      line.append(el("b", null, `${e.who}'s AI `), document.createTextNode(e.text));
+      const meta = el("div", "meta");
+      meta.append(timeSpan(e.time));
+      row.append(line, meta);
+      activity.append(row);
+    }
+    if (events.length === 0) activity.append(el("li", "empty", "Nothing has happened yet."));
+
+    seen = nowSeen;
+  }
+
+  function setLive(ok) {
+    $("live").classList.toggle("down", !ok);
+    $("live-text").textContent = ok ? "live" : "connection lost";
+  }
+
+  async function tick() {
+    let state;
+    try {
+      const response = await fetch(`/state?room=${encodeURIComponent(room)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(response.status);
+      state = await response.json();
+    } catch {
+      setLive(false);
+      return;
+    }
+    setLive(true);
+
+    // Redraw the lists only when something was added or removed, so the
+    // highlight on a new item is not interrupted by the next refresh.
+    const signature = JSON.stringify([state.decisions.map((d) => d.id), state.conflicts.map((c) => c.id)]);
+    if (signature !== lastSignature) {
+      lastSignature = signature;
+      renderLists(state);
+    }
+    renderPeople(state.people || []);
+    updateTimes(state.now);
+
+    const checker = $("checker");
+    checker.className = state.checker === "on" ? "" : "warn";
+    checker.textContent = state.checker === "on"
+      ? "Conflict check: on"
+      : "Conflict check: OFF (no API key on the server). Decisions are saved unchecked.";
+  }
+
+  $("reset").addEventListener("click", async () => {
+    if (!confirm(`Delete every decision and conflict in room "${room}"? This cannot be undone.`)) return;
+    await fetch(`/reset?room=${encodeURIComponent(room)}`, { method: "POST" });
+    tick();
+  });
+
+  tick();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>

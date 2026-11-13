@@ -14,10 +14,12 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 PROJECT_ROOT = Path(__file__).parent.parent
 DB_PATH = Path(__file__).parent / "contract.db"
+DASHBOARD_PATH = Path(__file__).parent / "dashboard.html"
 
 log = logging.getLogger("uvicorn.error")
 
@@ -82,6 +84,17 @@ def create_tables() -> None:
             )
             """
         )
+        # When each person's agent last contacted the server.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS people (
+                room      TEXT NOT NULL,
+                name      TEXT NOT NULL,
+                last_seen TEXT NOT NULL,
+                PRIMARY KEY (room, name)
+            )
+            """
+        )
 
 
 def now() -> str:
@@ -106,6 +119,33 @@ def load_conflicts(room: str) -> list[dict]:
             "SELECT * FROM conflicts WHERE room = ? ORDER BY id DESC", (room,)
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def touch_person(room: str, name: str) -> None:
+    """Remember that this person's agent was active just now."""
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO people (room, name, last_seen) VALUES (?, ?, ?) "
+            "ON CONFLICT (room, name) DO UPDATE SET last_seen = excluded.last_seen",
+            (room, name, now()),
+        )
+
+
+def load_people(room: str) -> list[dict]:
+    """Everyone seen in this room, with how many seconds ago they were last active."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT name, last_seen FROM people WHERE room = ? ORDER BY name", (room,)
+        ).fetchall()
+    current = datetime.now(timezone.utc)
+    return [
+        {
+            "name": row["name"],
+            "last_seen": row["last_seen"],
+            "seconds_ago": int((current - datetime.fromisoformat(row["last_seen"])).total_seconds()),
+        }
+        for row in rows
+    ]
 
 
 def contract_as_text(decisions: list[dict]) -> str:
@@ -178,6 +218,7 @@ def add_decision(decision: NewDecision) -> dict:
       check     - "checked", "not needed" (empty contract) or "skipped: <why>"
     """
     reply = {"decision": None, "conflict": None, "duplicate": None, "check": "checked"}
+    touch_person(decision.room, decision.author)
     existing = load_decisions(decision.room)
 
     verdict = None
@@ -205,8 +246,13 @@ def add_decision(decision: NewDecision) -> dict:
 
 
 @app.get("/contract")
-def get_contract(room: str) -> dict:
-    """The contract for one room: as a list, and as ready-to-print text."""
+def get_contract(room: str, name: str | None = None) -> dict:
+    """The contract for one room: as a list, and as ready-to-print text.
+
+    The hook passes the person's name, which marks them as active.
+    """
+    if name:
+        touch_person(room, name)
     decisions = load_decisions(room)
     return {"room": room, "decisions": decisions, "text": contract_as_text(decisions)}
 
@@ -218,5 +264,22 @@ def get_state(room: str) -> dict:
         "room": room,
         "decisions": load_decisions(room),
         "conflicts": load_conflicts(room),
+        "people": load_people(room),
         "checker": "on" if conflicts.is_configured() else "off",
+        "now": now(),  # the page shows "2 min ago" against the server's clock
     }
+
+
+@app.post("/reset")
+def reset_room(room: str) -> dict:
+    """Empty one room: its decisions, conflicts and people. Used before a demo."""
+    with connect() as conn:
+        for table in ("decisions", "conflicts", "people"):
+            conn.execute(f"DELETE FROM {table} WHERE room = ?", (room,))
+    return {"room": room, "reset": True}
+
+
+@app.get("/", include_in_schema=False)
+def dashboard() -> FileResponse:
+    """The dashboard page. Open http://localhost:8000/?room=demo"""
+    return FileResponse(DASHBOARD_PATH, headers={"Cache-Control": "no-store"})
