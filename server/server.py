@@ -279,6 +279,12 @@ def reset_room(room: str) -> dict:
     return {"room": room, "reset": True}
 
 
+@app.get("/health", include_in_schema=False)
+def health() -> dict:
+    """A cheap request that hosting services use to check the server is up."""
+    return {"ok": True}
+
+
 @app.get("/", include_in_schema=False)
 def dashboard() -> FileResponse:
     """The dashboard page. Open http://localhost:8000/?room=demo"""

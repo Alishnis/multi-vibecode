@@ -1,0 +1,20 @@
+# Render Blueprint: puts the team contract server on the internet.
+# In the Render dashboard choose New > Blueprint and pick this repository.
+# Render then asks for OPENROUTER_API_KEY; paste your key there, not here.
+#
+# Free plan limits to know:
+#   - the server sleeps when idle and takes up to a minute to wake up
+#   - the database file is wiped on every restart or redeploy
+services:
+  - type: web
+    name: team-contract
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r server/requirements.txt
+    startCommand: uvicorn server.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
