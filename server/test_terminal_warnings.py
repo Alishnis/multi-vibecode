@@ -92,7 +92,7 @@ class TerminalWarningsTest(unittest.TestCase):
         self.assertIsNone(self.hook("Mei"))
         self.assertIsNone(self.hook("Ali", "PostToolUse"))
         warning = self.hook("Mei")
-        self.assertIn("[Team Contract: ACTIVE COLLISION]", warning["systemMessage"])
+        self.assertIn("[CoopDev: ACTIVE COLLISION]", warning["systemMessage"])
         self.assertIn("src/todos.py", warning["systemMessage"])
         self.assertIn("Ali", warning["systemMessage"])
         self.assertIn("just now", warning["systemMessage"])
@@ -228,7 +228,7 @@ class TerminalWarningsTest(unittest.TestCase):
                                      "edited_at": datetime.now(timezone.utc).isoformat()}]})
         warning = self.hook("Mei")
         self.assertIn("Ali on main", warning["systemMessage"])
-        self.assertIn("[Team Contract: WORK IN ANOTHER CHECKOUT]", warning["systemMessage"])
+        self.assertIn("[CoopDev: WORK IN ANOTHER CHECKOUT]", warning["systemMessage"])
         self.assertIn("in their own copy, not in yours", warning["systemMessage"])
         self.assertIn("does not prove", warning["hookSpecificOutput"]["additionalContext"])
 
@@ -288,7 +288,7 @@ class TerminalWarningsTest(unittest.TestCase):
         self.assertIsNone(self.hook("Ali"))                           # my own claim says nothing to me
         self.assertIsNone(self.hook("Mei", path="docs/readme.md"))    # outside the claimed folder
         warning = self.hook("Mei")
-        self.assertIn("[Team Contract: CLAIMED BY A TEAMMATE]", warning["systemMessage"])
+        self.assertIn("[CoopDev: CLAIMED BY A TEAMMATE]", warning["systemMessage"])
         self.assertIn('Ali claimed this for "Add delete for todos" (119 min left).', warning["systemMessage"])
         self.assertIn("first active reservation", warning["systemMessage"])
         self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "deny")
@@ -303,7 +303,7 @@ class TerminalWarningsTest(unittest.TestCase):
             conn.execute("UPDATE file_edits SET edited_at = ? WHERE author = 'Mei'", (ago(1),))
         self.hook("Ali", "PostToolUse")
         both = self.hook("Mei")["systemMessage"]
-        self.assertIn("[Team Contract: ACTIVE COLLISION]", both)
+        self.assertIn("[CoopDev: ACTIVE COLLISION]", both)
         self.assertNotIn("claimed this", both)                        # the claim was already acknowledged
         self.configure("Mei", overlap="note")
         client.post("/claims/release", json={"room": "terminal-test", "author": "Ali"})
@@ -349,10 +349,10 @@ class TerminalWarningsTest(unittest.TestCase):
         self.write("Ali", "v2 from Ali\n")
         self.write("Mei", "v1\n")
         self.hook("Ali", "PostToolUse")
-        self.assertIn("[Team Contract: ACTIVE COLLISION]", self.hook("Mei")["systemMessage"])
+        self.assertIn("[CoopDev: ACTIVE COLLISION]", self.hook("Mei")["systemMessage"])
         self.age_edit("Ali", 12)
         warning = self.hook("Mei")
-        self.assertIn("[Team Contract: WORK IN ANOTHER CHECKOUT]", warning["systemMessage"])
+        self.assertIn("[CoopDev: WORK IN ANOTHER CHECKOUT]", warning["systemMessage"])
         self.assertIn("12 min ago", warning["systemMessage"])
         self.assertIn("merge conflict is forming", warning["systemMessage"])
         self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "deny")
@@ -363,7 +363,7 @@ class TerminalWarningsTest(unittest.TestCase):
         self.hook("Ali", "PostToolUse")
         self.age_edit("Ali", 12)
         warning = self.hook("Mei")
-        self.assertIn("[Team Contract: OUTDATED READ]", warning["systemMessage"])
+        self.assertIn("[CoopDev: OUTDATED READ]", warning["systemMessage"])
         self.assertIn("read the file again", warning["systemMessage"])
         self.assertEqual(warning["hookSpecificOutput"]["permissionDecision"], "deny")
         requests_before = len(self.requests)
@@ -382,10 +382,10 @@ class TerminalWarningsTest(unittest.TestCase):
         self.age_edit("Ali", 12)
         self.write("Mei", "v2, changed since\n")
         stale = self.hook("Mei")
-        self.assertIn("[Team Contract: OUTDATED READ]", stale["systemMessage"])   # not read since Ali's change
+        self.assertIn("[CoopDev: OUTDATED READ]", stale["systemMessage"])   # not read since Ali's change
         self.hook("Mei", "PostToolUse", tool="Read")
         recent = self.hook("Mei")
-        self.assertIn("[Team Contract: RECENT EDIT]", recent["systemMessage"])
+        self.assertIn("[CoopDev: RECENT EDIT]", recent["systemMessage"])
         self.assertIn("Low urgency", recent["systemMessage"])
         self.assertNotIn("permissionDecision", recent["hookSpecificOutput"])
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Start the team contract server so teammates on the same Wi-Fi or hotspot can
+# Start the shared contract server so teammates on the same Wi-Fi or hotspot can
 # reach it. Run from anywhere:
 #
 #     sh start_server.sh          (port 8000)
@@ -35,7 +35,7 @@ if [ ! -f .env ]; then
 fi
 
 echo ""
-echo "Team contract server"
+echo "CoopDev server"
 echo "  On this computer:   http://127.0.0.1:$PORT/?room=demo"
 echo "  For teammates:      http://$ADDRESS:$PORT"
 echo "  (teammates must be on the same Wi-Fi or hotspot, and use that address"

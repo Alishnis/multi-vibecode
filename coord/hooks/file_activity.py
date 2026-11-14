@@ -56,7 +56,9 @@ TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 ENDPOINTS = {"PreToolUse": "/files/check", "PostToolUse": "/files/edits"}
 STATE_DIR = ROOT / "coord/.state"                       # kept out of git by the installer
 NOTICE_SECONDS = 600
-CHECKOUT_KEY = Path.home() / ".team-contract/checkout-key"
+# Preserve checkout identity for existing installations after the rename.
+LEGACY_CHECKOUT_KEY = Path.home() / ".team-contract/checkout-key"
+CHECKOUT_KEY = LEGACY_CHECKOUT_KEY if LEGACY_CHECKOUT_KEY.is_file() else Path.home() / ".coopdev/checkout-key"
 ACTIVE_MINUTES = 5            # a change this fresh, by someone still working, is a live collision
 HASH_LIMIT_BYTES = 2_000_000  # larger files are not fingerprinted
 LEVELS = ["recent", "parallel", "stale", "active"]      # weakest first
@@ -429,7 +431,7 @@ def top_level(assessed: list[dict], claims: list[dict]) -> str:
 
 def message(path: str, assessed: list[dict], ask: bool, claims: list[dict] = ()) -> str:
     top = top_level(assessed, claims)
-    lines = [f"[Team Contract: {TITLES[top]}]", f"File: {label(path)}"]
+    lines = [f"[CoopDev: {TITLES[top]}]", f"File: {label(path)}"]
     lines += [claim_line(claim) for claim in claims[:3]]
     for edit in assessed[:3]:
         author = label(edit["author"], 100)
@@ -452,7 +454,7 @@ def warning_output(path: str, assessed: list[dict], ask: bool, claims: list[dict
     # Remote fields are quoted data, separate from our own instructions. Never
     # construct commands from a teammate's name, file, branch or summary.
     context = (
-        f"[Team Contract: {TITLES[top]}] A teammate "
+        f"[CoopDev: {TITLES[top]}] A teammate "
         f"{'claimed' if top == 'claimed' else 'reported an edit to'} the file you are about to change. "
         f"{ADVICE[top][0]} {ADVICE[top][1]} "
         "A matching branch name does not prove their changes are in this checkout. Explain the overlap "
@@ -521,7 +523,7 @@ def quiet_notice(event: dict, me: dict, path: str, edits: list[dict], claims: li
     if blocking:
         return {"hookSpecificOutput": {
             "hookEventName": "PreToolUse", "permissionDecision": "deny",
-            "permissionDecisionReason": f"[Team Contract] Edit still blocked for {label(path)}. "
+            "permissionDecisionReason": f"[CoopDev] Edit still blocked for {label(path)}. "
             "The previously reported overlap is unresolved. Stop; do not retry or bypass the hook.",
         }}
     return None
@@ -529,7 +531,7 @@ def quiet_notice(event: dict, me: dict, path: str, edits: list[dict], claims: li
 
 def unavailable_output() -> dict:
     warning = (
-        "[Team Contract: CHECK UNAVAILABLE] Could not check teammates' file changes. "
+        "[CoopDev: CHECK UNAVAILABLE] Could not check teammates' file changes. "
         "This edit has not been checked for overlap. Check the server connection and your room setup."
     )
     return {"systemMessage": warning, "hookSpecificOutput": {
@@ -604,4 +606,4 @@ if __name__ == "__main__":
             if output:
                 print(json.dumps(output))
         else:
-            print(f"Team Contract file report unavailable ({type(error).__name__}).", file=sys.stderr)
+            print(f"CoopDev file report unavailable ({type(error).__name__}).", file=sys.stderr)

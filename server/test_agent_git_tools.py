@@ -20,7 +20,7 @@ def call(name, arguments):
 
 
 class AgentGitToolsTest(unittest.TestCase):
-    def run_tool(self, name, arguments, returncode=0, stdout="[Team Contract] ok", stderr=""):
+    def run_tool(self, name, arguments, returncode=0, stdout="[CoopDev] ok", stderr=""):
         finished = subprocess.CompletedProcess([], returncode, stdout, stderr)
         with patch.object(tools.subprocess, "run", return_value=finished) as run:
             text, is_error = call(name, arguments)
@@ -39,14 +39,14 @@ class AgentGitToolsTest(unittest.TestCase):
         ]
         for name, arguments, expected in cases:
             text, is_error, helper_args, run = self.run_tool(name, arguments)
-            self.assertEqual((helper_args, is_error, text), (expected, False, "[Team Contract] ok"), name)
+            self.assertEqual((helper_args, is_error, text), (expected, False, "[CoopDev] ok"), name)
             # The helper must never wait for typed input or write to the protocol stream.
             self.assertIs(run.call_args.kwargs["stdin"], subprocess.DEVNULL)
             self.assertTrue(run.call_args.kwargs["capture_output"])
             self.assertEqual(Path(run.call_args.args[0][1]).name, "git_sync.py")
 
     def test_a_failed_git_step_reaches_the_agent_as_an_error_with_the_reason(self):
-        reason = "[Team Contract] main is the shared branch. Run python3 coord/git_sync.py start my-task first."
+        reason = "[CoopDev] main is the shared branch. Run python3 coord/git_sync.py start my-task first."
         text, is_error, _, _ = self.run_tool("share_work", {}, returncode=1, stdout="", stderr=reason)
         self.assertTrue(is_error)
         self.assertEqual(text, reason)

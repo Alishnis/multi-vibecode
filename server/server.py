@@ -1,4 +1,4 @@
-"""Coordination server: stores the team contract (a list of decisions per room).
+"""Coordination server: stores the shared contract (a list of decisions per room).
 
 Run from the project root:
     .venv/bin/uvicorn server.server:app --port 8000
@@ -45,6 +45,7 @@ CLIENT_FILES = (
     "coord/summary.py",
     "coord/me.example.json",
     "tc",
+    "coopdev",
 )
 
 Category = Literal["stack", "api", "data", "convention", "other"]
@@ -420,8 +421,8 @@ def contract_as_text(decisions: list[dict], budget: int = CONTRACT_TEXT_BUDGET) 
     the newest decisions are left out and the agent is told how many.
     """
     if not decisions:
-        return "The team contract is empty. No decisions have been recorded yet."
-    lines = ["Team contract (decisions already made by the team):"]
+        return "The shared contract is empty. No decisions have been recorded yet."
+    lines = ["CoopDev (decisions already made by the team):"]
     used = len(lines[0])
     for position, d in enumerate(decisions):
         line = f"- [{d['category']}] {d['text']} (by {d['author']})"
@@ -949,7 +950,7 @@ def save_conflict(decision: NewDecision, existing: dict | None, explanation: str
             "resolution": None, "resolved_by": None, "resolved_at": None}
 
 
-app = FastAPI(title="Team contract server")
+app = FastAPI(title="CoopDev server")
 create_tables()
 if not conflicts.is_configured():
     log.warning("No OPENROUTER_API_KEY or GEMINI_API_KEY in .env: decisions are saved WITHOUT a conflict check.")
@@ -1234,7 +1235,7 @@ def get_contract(room: RoomParam, name: NameParam = None) -> dict:
     with connect() as conn:
         text += messages_as_text(conn, room, name, HOOK_TEXT_LIMIT - len(text))
     if len(text) > HOOK_TEXT_LIMIT + 400:  # last resort; the budgets above should keep us far from it
-        text = text[:HOOK_TEXT_LIMIT + 300] + "\n[Team Contract: text shortened to fit. The dashboard has the rest.]"
+        text = text[:HOOK_TEXT_LIMIT + 300] + "\n[CoopDev: text shortened to fit. The dashboard has the rest.]"
     return {"room": room, "decisions": decisions, "text": text}
 
 
@@ -1724,7 +1725,7 @@ def client_download() -> Response:
             archive.write(PROJECT_ROOT / relative, relative)
     return Response(
         buffer.getvalue(), media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="team-contract.zip"',
+        headers={"Content-Disposition": 'attachment; filename="coopdev.zip"',
                  "Cache-Control": "no-store"},
     )
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add the team contract tool to a project folder.
+"""Add the shared contract tool to a project folder.
 
     python3 install.py /path/to/your/project
 
@@ -40,11 +40,13 @@ FILES_TO_COPY = [
     "coord/summary.py",
     "coord/me.example.json",
     "tc",
+    "coopdev",
 ]
-LAUNCHER = "tc"            # ./tc in the project folder: the short way to run coord/team.py
-LAUNCHER_MARK = "Team Contract shortcut"
+LAUNCHER = "coopdev"            # ./coopdev in the project folder: the short way to run coord/team.py
+LAUNCHER_MARK = "CoopDev shortcut"
+LEGACY_LAUNCHER_MARK = "Team Contract shortcut"
 HOOK_SCRIPTS = ("coord/hooks/contract_hook.py", "coord/hooks/file_activity.py")
-TOOL_NAME = "team-contract"
+TOOL_NAME = "coopdev"
 IGNORE_LINES = ["coord/me.json", "coord/.state/", ".claude/settings.local.json"]
 
 
@@ -74,20 +76,21 @@ def copy_files(target: Path) -> None:
     copied = 0
     for relative in FILES_TO_COPY:
         destination = target / relative
-        if relative == LAUNCHER and destination.exists() and LAUNCHER_MARK not in destination.read_text(errors="replace"):
-            # The project has its own file called tc. Leave it alone.
-            print(f"  kept your own {relative}; use python3 coord/team.py instead of ./tc")
+        if relative in (LAUNCHER, "tc") and destination.exists() and not any(
+                mark in destination.read_text(errors="replace") for mark in (LAUNCHER_MARK, LEGACY_LAUNCHER_MARK)):
+            # Preserve a project’s own script with either shortcut name.
+            print(f"  kept your own {relative}; use python3 coord/team.py instead of ./coopdev")
             continue
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(SOURCE / relative, destination)
-        if relative == LAUNCHER:
+        if relative in (LAUNCHER, "tc"):
             destination.chmod(0o755)  # a zip download loses the "can run" flag
         copied += 1
-    print(f"  copied {copied} files (coord/ and the ./tc shortcut)")
+    print(f"  copied {copied} files (coord/ and the ./coopdev shortcut)")
 
 
 def add_hook(target: Path) -> None:
-    """Install missing Team Contract hooks without replacing other hooks."""
+    """Install missing CoopDev hooks without replacing other hooks."""
     source_hooks = read_json(SOURCE / ".claude/settings.json")["hooks"]
     path = target / ".claude/settings.json"
     settings = read_json(path)
@@ -109,9 +112,9 @@ def add_hook(target: Path) -> None:
                 changed = True
     if changed:
         write_json(path, settings)
-        print("  added Team Contract hooks to .claude/settings.json")
+        print("  added CoopDev hooks to .claude/settings.json")
     else:
-        print("  Team Contract hooks already installed")
+        print("  CoopDev hooks already installed")
 
 
 def add_tool(target: Path) -> None:
@@ -120,6 +123,16 @@ def add_tool(target: Path) -> None:
     path = target / ".mcp.json"
     config = read_json(path)
     servers = config.setdefault("mcpServers", {})
+    # Remove only our old registration; never touch an unrelated server or approval settings.
+    if TOOL_NAME in servers and servers[TOOL_NAME] != our_server:
+        stop("an unrelated coopdev connection already exists in .mcp.json; rename it before installing")
+    legacy = servers.get("team-contract")
+    if legacy == our_server:
+        del servers["team-contract"]
+        servers[TOOL_NAME] = our_server
+        write_json(path, config)
+        print("  renamed the agent connection to coopdev; restart Claude and approve it when asked")
+        return
     if servers.get(TOOL_NAME) == our_server:
         print("  tool already in .mcp.json")
         return
@@ -188,7 +201,7 @@ def check_server(me: dict) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Add the team contract tool to a project folder.")
+    parser = argparse.ArgumentParser(description="Add the shared contract tool to a project folder.")
     parser.add_argument("project", nargs="?", default=".", help="the project folder (default: current folder)")
     parser.add_argument("--name", help="your name, shown to teammates")
     parser.add_argument("--room", help="the room code your team shares")
@@ -197,10 +210,12 @@ def main() -> None:
     args = parser.parse_args()
 
     target = Path(args.project).expanduser().resolve()
+    if target == Path.home().resolve():
+        stop("Choose a project folder, not your home folder. Installing here would register hooks for every Claude project.")
     if not target.is_dir():
         stop(f"{target} is not a folder.")
 
-    print(f"Installing the team contract tool into {target}")
+    print(f"Installing the shared contract tool into {target}")
     # Read every settings file and collect every answer before changing
     # anything, so a broken file or a missing answer stops the install before
     # a single file is written.
@@ -221,11 +236,11 @@ def main() -> None:
 
     dashboard = me["server"] + "/?" + urllib.parse.urlencode({"room": me["room"]})
     if args.guided:
-        print(f"\nTeam Contract is installed. Your room: {dashboard}")
+        print(f"\nCoopDev is installed. Your room: {dashboard}")
     else:
         print(
-            f"\nTeam Contract is installed. Open your room: {dashboard}\n"
-            "  Everyday shortcut, in this folder: ./tc today   (./tc alone shows every action)\n"
+            f"\nCoopDev is installed. Open your room: {dashboard}\n"
+            "  Everyday shortcut, in this folder: ./coopdev today   (./coopdev alone shows every action)\n"
             "  Or just talk to Claude: \"what is the team doing?\", \"start a task for the login page\",\n"
             "  \"share my work\", \"get the latest code\", \"tell the team the demo is at 3pm\".\n"
             "  Next: open a new Claude Code session in your project folder.\n"
@@ -241,7 +256,7 @@ def main() -> None:
         # finish, say so and keep its exit code instead of printing a traceback.
         done = subprocess.run([sys.executable, str(target / "coord/team.py"), "--action", "setup"], cwd=target)
         if done.returncode:
-            sys.exit(f"Setup did not finish. Run it again with: ./tc setup")
+            sys.exit(f"Setup did not finish. Run it again with: ./coopdev setup")
 
 
 if __name__ == "__main__":

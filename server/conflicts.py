@@ -76,7 +76,7 @@ def _take_small_slot() -> bool:
 SYSTEM_PROMPT = """\
 You check decisions for a software team. Each teammate works with their own AI \
 coding agent on the same codebase, and the agents cannot see each other's work. \
-To keep them aligned, the team keeps a "team contract": a list of project \
+To keep them aligned, the team keeps a "shared contract": a list of project \
 decisions that every agent must follow. Before a new decision is added, you \
 compare it with the decisions already in the contract.
 
@@ -182,12 +182,12 @@ endpoint, a different name for a decided field, a different port, or the
 opposite of a decided convention. Cite the decision's id and the file.
 
 Judge the executable behavior in the added lines. A filename containing
-"test", "check", "demo", or "team-contract" does not exempt that code from
-the contract. The caller already excludes Team Contract's installed tooling
+"test", "check", "demo", or "coopdev" does not exempt that code from
+the contract. The caller already excludes CoopDev's installed tooling
 under coord/, .claude/, and .mcp.json. Other files still need review.
 For example, if the todo backend must use Django, added code that constructs
 an Express app, registers GET /todos and calls app.listen breaks that decision,
-even in team-contract-check-123.js and even when the port matches.
+even in coopdev-check-123.js and even when the port matches.
 Distinguish this runnable backend from a test that merely sends requests to
 the chosen backend or asserts its results.
 
@@ -267,7 +267,7 @@ def check_decision(category: str, text: str, existing: list[dict]) -> Verdict:
         f"id {d['id']}: [{d['category']}] {d['text']}" for d in existing
     )
     question = (
-        f"Existing decisions in the team contract:\n{contract_lines}\n\n"
+        f"Existing decisions in the shared contract:\n{contract_lines}\n\n"
         f"New decision to check:\n[{category}] {text}"
     )
     return structured_check(SYSTEM_PROMPT, question, "verdict", VERDICT_SCHEMA, Verdict)

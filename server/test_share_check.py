@@ -66,7 +66,7 @@ class PublishCheckTest(unittest.TestCase):
         self.repo.mkdir()
         self.enterContext(patch.object(git_sync, "PROJECT", self.repo))
         self.git("init", "-q", "-b", "main")
-        self.git("config", "user.name", "Team Contract Test")
+        self.git("config", "user.name", "CoopDev Test")
         self.git("config", "user.email", "test@example.invalid")
         (self.repo / "app.py").write_text("print('v1')\n")
         self.git("add", "app.py")
@@ -77,7 +77,7 @@ class PublishCheckTest(unittest.TestCase):
         self.git("switch", "-q", "-c", "mei/api")
         (self.repo / "server.js").write_text("const express = require('express')\n")
         (self.repo / "coord").mkdir()
-        (self.repo / "coord/tool.py").write_text("# Team Contract's own file\n")
+        (self.repo / "coord/tool.py").write_text("# CoopDev's own file\n")
         self.git("add", "server.js", "coord/tool.py")
         self.git("commit", "-q", "-m", "Add Express server")
         self.finding = {"decision_id": 1, "decision": "Backend is FastAPI.", "decided_by": "Ali",
@@ -121,10 +121,10 @@ class PublishCheckTest(unittest.TestCase):
         for part in ("Not shared", "server.js: Uses Express, not FastAPI.", "Backend is FastAPI.", "publish --anyway"):
             self.assertIn(part, message)
         self.assertFalse(self.pushed())
-        # Only project code is sent: Team Contract's own files are left out.
+        # Only project code is sent: CoopDev's own files are left out.
         self.assertEqual(self.sent[0]["files"], ["server.js"])
         self.assertIn("require('express')", self.sent[0]["diff"])
-        self.assertNotIn("Team Contract's own file", self.sent[0]["diff"])
+        self.assertNotIn("CoopDev's own file", self.sent[0]["diff"])
         said = self.publish({"check": "checked", "findings": [self.finding]}, anyway=True)
         self.assertIn("Shared although this code breaks a team decision", said)
         self.assertTrue(self.pushed())

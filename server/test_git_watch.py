@@ -47,7 +47,7 @@ class GitWatchTest(unittest.TestCase):
             return git_sync.command("git", *args)
 
         git("init", "-q", "-b", "main")
-        git("config", "user.name", "Team Contract Test")
+        git("config", "user.name", "CoopDev Test")
         git("config", "user.email", "test@example.invalid")
         git("commit", "-q", "--allow-empty", "-m", "Baseline")
         original = git("rev-parse", "HEAD")
@@ -139,7 +139,7 @@ class UnreviewedMergeTest(unittest.TestCase):
         self.checkout.mkdir()
         self.enterContext(patch.object(git_sync, "PROJECT", self.checkout))
         self.git("init", "-q", "-b", "main")
-        self.git("config", "user.name", "Team Contract Test")
+        self.git("config", "user.name", "CoopDev Test")
         self.git("config", "user.email", "test@example.invalid")
         (self.checkout / "app.py").write_text("print('v1')\n")
         self.git("add", "app.py")

@@ -1,4 +1,4 @@
-"""One local menu for Team Contract. No shell commands from the website are executed."""
+"""One local menu for CoopDev. No shell commands from the website are executed."""
 import argparse
 import json
 import os
@@ -14,7 +14,7 @@ import webbrowser
 import git_sync
 
 ROOT = Path(__file__).resolve().parent.parent
-# The word you type after ./tc, and what it does. The menu shows them in this order.
+# The word you type after ./coopdev, and what it does. The menu shows them in this order.
 ACTIONS = {
     "today": "What's happening, and what to do next",
     "work": "Open my workspace (Claude, plus syncing if I turned it on)",
@@ -30,12 +30,12 @@ ACTIONS = {
     "setup": "Run guided setup again",
     "doctor": "Check my setup",
 }
-SHORTCUT = "./tc"  # the launcher the installer puts in the project folder
+SHORTCUT = "./coopdev"  # the launcher the installer puts in the project folder
 
 
 def usage() -> str:
     width = max(map(len, ACTIONS))
-    return "Type ./tc and a word:\n" + "\n".join(f"  {SHORTCUT} {word.ljust(width)}  {text}" for word, text in ACTIONS.items())
+    return "Type ./coopdev and a word:\n" + "\n".join(f"  {SHORTCUT} {word.ljust(width)}  {text}" for word, text in ACTIONS.items())
 
 
 def today(me):
@@ -104,7 +104,7 @@ def setup(me):
     doctor(me)
     if confirm("Open your workspace now?", True):
         return workspace(me)
-    print("Ready. Next time, in this folder, run: ./tc work   (or ./tc for everything else)")
+    print("Ready. Next time, in this folder, run: ./coopdev work   (or ./coopdev for everything else)")
     return 0
 
 
@@ -160,7 +160,7 @@ def doctor(me):
                 for hook in group.get("hooks", [])) for group in settings.get("hooks", {}).get(event, []))
             checks.append((found, f"{event} hook for {tool}"))
         mcp = json.loads((ROOT / ".mcp.json").read_text())
-        checks.append(("team-contract" in mcp.get("mcpServers", {}), "Team Contract agent connection configured"))
+        checks.append((bool({"coopdev", "team-contract"} & mcp.get("mcpServers", {}).keys()), "CoopDev agent connection configured"))
     except (OSError, ValueError, TypeError, re.error):
         checks.append((False, "Agent configuration readable — rerun the installer"))
     for file in ("coord/hooks/file_activity.py", "coord/hooks/contract_hook.py", "coord/mcp/server.py", "coord/tc_http.py"):
@@ -226,7 +226,7 @@ def perform(action, me):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Team Contract action menu", add_help=False)
+    parser = argparse.ArgumentParser(description="CoopDev action menu", add_help=False)
     parser.add_argument("word", nargs="?", help="what to do, for example today, start, share or sync")
     parser.add_argument("--action", choices=ACTIONS)
     parser.add_argument("-h", "--help", action="store_true")
@@ -250,7 +250,7 @@ def main():
             return 1
         actions = list(ACTIONS)
         while True:
-            print("\nTeam Contract — what would you like to do?")
+            print("\nCoopDev — what would you like to do?")
             for number, action in enumerate(actions, 1):
                 print(f"  {number:>2}. {ACTIONS[action]}   ({SHORTCUT} {action})")
             choice = input("   0. Exit\nType a number or a word: ").strip().lower()
@@ -266,7 +266,7 @@ def main():
             except KeyboardInterrupt:
                 print("\nStopped. Returning to menu.")
             except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
-                print(f"Action could not finish ({type(error).__name__}). Run ./tc doctor to check your setup.")
+                print(f"Action could not finish ({type(error).__name__}). Run ./coopdev doctor to check your setup.")
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         print(f"Setup or action could not finish ({type(error).__name__}). Run the installer or Check my setup.")
         return 1

@@ -1,6 +1,6 @@
 """The room in plain words, and the one thing to do next.
 
-./tc today prints this in the terminal, and the team_status agent tool gives
+./coopdev today prints this in the terminal, and the team_status agent tool gives
 it to Claude, so nobody has to read raw data. Built-in libraries only.
 
 describe() takes the dashboard's /state reply and the reader's own name.

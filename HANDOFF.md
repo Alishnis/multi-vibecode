@@ -1,4 +1,4 @@
-# Handoff: team contract tool for multi-person AI coding
+# Handoff: shared contract tool for multi-person AI coding
 
 You are taking over a project from another AI assistant. This file is everything you need to continue. Read it fully before acting. It was written on 2026-11-13 and every "verified" claim below was checked on that date.
 
@@ -23,7 +23,7 @@ These are standing instructions from the user. Follow them.
 
 ## 2. What the product is
 
-**One sentence:** a shared "team contract" that every teammate's Claude Code agent reads before it acts and writes to when it decides something, with a warning when a new decision contradicts an old one.
+**One sentence:** a shared "shared contract" that every teammate's Claude Code agent reads before it acts and writes to when it decides something, with a warning when a new decision contradicts an old one.
 
 **The problem it solves:** when several people each use an AI coding agent on one project, the agents cannot see each other. One picks Python, another picks Node.js. One names a field `user_id`, another `userId`. Git merges this without complaint and the app breaks later. This is a **decision conflict**, as opposed to a file conflict.
 
@@ -86,7 +86,7 @@ Not in git on purpose: `.env`, `.venv/`, `server/contract.db`, `coord/me.json`, 
 |---|---|---|
 | `ok` | Saves the decision | "Recorded" |
 | `conflict` | Does not save it; stores a row in `conflicts` | "CONFLICT... Stop. Tell the user and ask whether to follow the team's decision or change it." |
-| `duplicate` | Does not save it | "Already in the team contract. Follow the existing decision." |
+| `duplicate` | Does not save it | "Already in the shared contract. Follow the existing decision." |
 | checker unavailable | Saves it anyway (fails open) | "Recorded", with a note that it was not checked |
 
 When a user's request contradicts the contract, the agent is instructed to submit it with `record_decision` first, so the conflict is logged and appears on the dashboard, and then ask its human.

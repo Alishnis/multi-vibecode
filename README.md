@@ -1,10 +1,10 @@
-# Team Contract
+# CoopDev
 
-Team Contract shares project decisions between Claude Code sessions. Each prompt loads the decisions for your team's room. When Claude proposes a decision that contradicts an existing one, the server logs the conflict and keeps the existing decision in the contract. A person then settles the conflict on the dashboard, and every teammate's agent is told about the change on its next prompt.
+CoopDev shares project decisions between Claude Code sessions. Each prompt loads the decisions for your team's room. When Claude proposes a decision that contradicts an existing one, the server logs the conflict and keeps the existing decision in the contract. A person then settles the conflict on the dashboard, and every teammate's agent is told about the change on its next prompt.
 
 ## Start here
 
-You only need to type one command, once. After that, talk to Claude, or use the short `./tc` shortcut.
+You only need to type one command, once. After that, talk to Claude, or use the short `./coopdev` shortcut.
 
 **1. Join** (once per computer): open the [homepage](https://team-contract.onrender.com/), pick a room name, copy the command, and paste it into Terminal inside your project folder. A teammate can also send you the ready-made message from the dashboard's **Copy invite** button.
 
@@ -21,39 +21,39 @@ You only need to type one command, once. After that, talk to Claude, or use the 
 
 Claude also claims files before editing and warns you before an edit that would collide with a teammate's. You do not have to ask for those.
 
-**3. Or use `./tc`** in Terminal, inside the project folder:
+**3. Or use `./coopdev`** in Terminal, inside the project folder:
 
 | Type | What it does |
 | --- | --- |
-| `./tc today` | The same plain summary as above, ending with one next step. |
-| `./tc work` | Opens Claude, and keeps your shared branch updated if you chose that during setup. |
-| `./tc start` | Asks for the task in plain words and makes the branch name for you. |
-| `./tc share` / `./tc sync` | Share your saved work; get the team's latest code. |
-| `./tc` | A numbered menu with everything else. You can type a number or a word. |
+| `./coopdev today` | The same plain summary as above, ending with one next step. |
+| `./coopdev work` | Opens Claude, and keeps your shared branch updated if you chose that during setup. |
+| `./coopdev start` | Asks for the task in plain words and makes the branch name for you. |
+| `./coopdev share` / `./coopdev sync` | Share your saved work; get the team's latest code. |
+| `./coopdev` | A numbered menu with everything else. You can type a number or a word. |
 
-`./tc help` lists every word. `./tc` is a two-line script that runs `python3 coord/team.py`; on Windows, or if your project already has its own file called `tc` (the installer never overwrites it), run `python3 coord/team.py` with the same words instead.
+`./coopdev help` lists every word. `./coopdev` is a two-line script that runs `python3 coord/team.py`; on Windows, or if your project already has its own file called `coopdev` (the installer never overwrites it), run `python3 coord/team.py` with the same words instead.
 
 **On the dashboard**, a **Get your team set up** list ticks itself off as you go: connect your project, set a team key, invite a teammate, connect GitHub, make the first decision. Each open step has a button that does it or shows how.
 
 ## Guided setup — one command
 
-Open [Team Contract](https://team-contract.onrender.com/), choose your room and name, and copy the setup command. Run it inside your project folder on Mac or Linux:
+Open [CoopDev](https://team-contract.onrender.com/), choose your room and name, and copy the setup command. Run it inside your project folder on Mac or Linux:
 
 ```sh
 curl -fsSL https://team-contract.onrender.com/install.sh | bash -s -- --server https://team-contract.onrender.com --room YOUR_ROOM
 ```
 
-Python 3 and curl are prerequisites. Setup installs the Team Contract files and merges the agent configuration with your existing settings. It offers to install Claude Code from Anthropic, install GitHub CLI through an existing Homebrew installation, sign into GitHub, and link the current GitHub repository to your room. Linking needs a team key, set on the dashboard. If Homebrew is unavailable, setup points to GitHub CLI’s installer. It does not create or replace your project’s Git repository.
+Python 3 and curl are prerequisites. Setup installs the CoopDev files and merges the agent configuration with your existing settings. It offers to install Claude Code from Anthropic, install GitHub CLI through an existing Homebrew installation, sign into GitHub, and link the current GitHub repository to your room. Linking needs a team key, set on the dashboard. If Homebrew is unavailable, setup points to GitHub CLI’s installer. It does not create or replace your project’s Git repository.
 
 Choose whether automatic sync should run while your workspace is open. Setup saves that preference, checks the installation, and offers to open the dashboard and Claude. Claude login, project trust, and agent permissions still require your interaction.
 
 For every later session, run this in the project folder:
 
 ```sh
-./tc work
+./coopdev work
 ```
 
-This opens Claude and the dashboard, and runs the Git watcher if you enabled it. The watcher stops when Claude exits; its messages are saved in `coord/.state/sync.log`. Only clean shared branches receive merged PR updates. To change preferences, run `./tc setup`. For the numbered menu, run `./tc`.
+This opens Claude and the dashboard, and runs the Git watcher if you enabled it. The watcher stops when Claude exits; its messages are saved in `coord/.state/sync.log`. Only clean shared branches receive merged PR updates. To change preferences, run `./coopdev setup`. For the numbered menu, run `./coopdev`.
 
 The website copies the command; it does not execute commands on your computer. Re-run setup to upgrade an existing project, then restart Claude. Your name, room, privacy preferences, and unrelated agent settings are preserved.
 
@@ -77,9 +77,9 @@ echo "$server/?room=$room"
 
 If you already cloned this repository, start inside your existing checkout. Keep using the same terminal so it remembers `test_dir`. Open the dashboard URL printed above.
 
-1. Run `(cd "$test_dir/ali" && claude --permission-mode default)`. Trust the test folder and approve the `team-contract` server if prompted. Send **“Record one team-contract decision: The todo backend uses FastAPI on port 18763.”** Review and approve the tool call. Confirm the decision appears on the dashboard, then exit Claude.
+1. Run `(cd "$test_dir/ali" && claude --permission-mode default)`. Trust the test folder and approve the `coopdev` server if prompted. Send **“Record one coopdev decision: The todo backend uses FastAPI on port 18763.”** Review and approve the tool call. Confirm the decision appears on the dashboard, then exit Claude.
 2. Run `(cd "$test_dir/teammate" && claude --permission-mode default)`. Approve the server if prompted. Ask **“What framework and port did the team choose for the todo backend?”** Claude should recall **FastAPI on port 18763**.
-3. In the teammate session, ask **“Propose switching the todo backend to Express through the team-contract tool. Do not write any code.”** Review and approve the tool call. The dashboard should show both people, one saved FastAPI decision, and a conflict for Express.
+3. In the teammate session, ask **“Propose switching the todo backend to Express through the coopdev tool. Do not write any code.”** Review and approve the tool call. The dashboard should show both people, one saved FastAPI decision, and a conflict for Express.
 
 ## Join from another laptop
 
@@ -103,7 +103,7 @@ The hosted flow has been tested with two independent sessions on one Mac. Setup 
 ## Troubleshooting
 
 - **Python reports `CERTIFICATE_VERIFY_FAILED` on macOS.** The client scripts now handle this themselves: when Python has no list of trusted certificates, they use the system's file (`/etc/ssl/cert.pem`). Certificate checking stays on. If you installed before this fix, update your checkout and rerun `install.py`. For a Python.org installation, you can also run its bundled [Install Certificates.command](https://docs.python.org/3/using/mac.html).
-- **Claude says the team contract could not be loaded.** The hook could not reach the server within 3 seconds. Open the server address in a browser to wake it, wait for the dashboard, and send the prompt again. The agent is told about the problem so that it does not guess teammates' decisions.
+- **Claude says the shared contract could not be loaded.** The hook could not reach the server within 3 seconds. Open the server address in a browser to wake it, wait for the dashboard, and send the prompt again. The agent is told about the problem so that it does not guess teammates' decisions.
 - **Claude Code Auto mode denies the recording tool.** Launch the test session with `claude --permission-mode default` and review the tool call in Manual mode. If the MCP server itself is missing, follow the installer's project approval instructions. [Claude Code permission modes](https://code.claude.com/docs/en/permission-modes)
 - **The dashboard is empty after a pause.** Check the room code and confirm the first decision was saved. Render's free service can take about a minute to wake, and the SQLite database can be cleared by spin-down, restart, or deploy. [Render free service limits](https://render.com/docs/free)
 
@@ -150,7 +150,7 @@ Run the updated installer for each teammate's clone. The room dashboard has copy
 
 ### Ask Claude Code instead of typing commands
 
-Once the room is linked to GitHub, you can stay inside Claude Code. The `team-contract` tool server has four Git tools, and Claude uses them when you ask in plain words. Claude Code asks you to approve each tool call.
+Once the room is linked to GitHub, you can stay inside Claude Code. The `coopdev` tool server has four Git tools, and Claude uses them when you ask in plain words. Claude Code asks you to approve each tool call.
 
 | You say | Claude uses | What happens |
 | --- | --- | --- |
@@ -177,7 +177,7 @@ Before `publish` pushes anything (and so before `share_work` does), it sends the
 - **You want to share it as it is.** Run `python3 coord/git_sync.py publish --anyway`, or tell Claude to share anyway. The dashboard then shows **Breaks a team decision** next to the branch, with the reason.
 - **The check cannot run** (no API key on the server, an empty contract, the server unreachable). The push goes ahead and you are told the code was not checked.
 
-What leaves your computer: up to 12,000 characters of the change, without Team Contract's own setup files. The server passes it to the checker and stores only the findings. To send nothing, add `"check_code": false` to `coord/me.json`, or run `publish --no-check`.
+What leaves your computer: up to 12,000 characters of the change, without CoopDev's own setup files. The server passes it to the checker and stores only the findings. To send nothing, add `"check_code": false` to `coord/me.json`, or run `publish --no-check`.
 
 The checker is tested with `.venv/bin/python -m server.test_share_live`, which needs the OpenRouter key.
 
@@ -280,7 +280,7 @@ The first three block the edit with `permissionDecision: deny`; claimed files al
 Example terminal notice (Claude Code controls its visual styling):
 
 ```text
-[Team Contract: ACTIVE COLLISION]
+[CoopDev: ACTIVE COLLISION]
 File: app.py
   Ali on ali/todo-delete edited this file (just now): +5/-1 lines, touching count_todos.
 They are working on this file right now, and their latest version is not in your copy.
@@ -307,8 +307,14 @@ Local automated check (uses two temporary installed clients and a local server, 
 
 ## One command for everyday actions
 
-After joining a project, run `./tc` (the same as `python3 coord/team.py`). Choose a number to start a task, share committed work, get latest code, keep syncing, check branch status, see reserved files, release your own reservations, check setup, open the dashboard, or open Claude. Press Ctrl+C while watching to return to the menu. Sharing still requires committed changes. No command auto-commits all your files.
+After joining a project, run `./coopdev` (the same as `python3 coord/team.py`). Choose a number to start a task, share committed work, get latest code, keep syncing, check branch status, see reserved files, release your own reservations, check setup, open the dashboard, or open Claude. Press Ctrl+C while watching to return to the menu. Sharing still requires committed changes. No command auto-commits all your files.
 
-For a setup check without opening the menu, run `./tc doctor`. It checks client files, hook registration, the agent connection, installed tools, GitHub login and server reachability. It does not prove that an agent has approved the hooks; test that in a fresh Claude session.
+For a setup check without opening the menu, run `./coopdev doctor`. It checks client files, hook registration, the agent connection, installed tools, GitHub login and server reachability. It does not prove that an agent has approved the hooks; test that in a fresh Claude session.
 
-The dashboard's **Terminal shortcuts** button shows the `./tc` words with copy buttons. Browser buttons do not execute arbitrary terminal commands. The existing one-line Join command installs the menu too.
+The dashboard's **Terminal shortcuts** button shows the `./coopdev` words with copy buttons. Browser buttons do not execute arbitrary terminal commands. The existing one-line Join command installs the menu too.
+
+## Renaming and existing installations
+
+The platform is now **CoopDev**. The existing hosted address remains `https://team-contract.onrender.com`; it is a deployment address, not the product name. Existing room data, API routes, `CONTRACT_*` settings, and local browser preferences keep their identifiers.
+
+Rerun the installer in each project to upgrade. The agent connection is now `coopdev`; the installer replaces its matching old registration, preserving unrelated connections and permission settings. Restart Claude and approve `coopdev` when prompted. The new everyday command is `./coopdev`; `./tc` remains a compatibility shortcut. Existing checkout identity files are reused so a rename does not create false overlap warnings.

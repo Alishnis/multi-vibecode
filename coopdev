@@ -1,0 +1,5 @@
+#!/bin/sh
+# CoopDev shortcut. Run ./coopdev for a menu, or ./coopdev today, ./coopdev start, ./coopdev share, ./coopdev sync.
+# It runs the menu in coord/team.py with Python 3, from this folder.
+cd "$(dirname "$0")" || exit 1
+exec python3 coord/team.py "$@"

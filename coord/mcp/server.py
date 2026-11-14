@@ -31,7 +31,7 @@ GIT_HELPER = Path(__file__).resolve().parent.parent / "git_sync.py"  # coord/git
 GIT_TIMEOUT_SECONDS = 150  # a push plus opening a pull request can take a while
 
 INSTRUCTIONS = (
-    "This project has a team contract: a shared list of decisions that every "
+    "This project has a shared contract: a shared list of decisions that every "
     "teammate's AI agent reads before it acts. The current contract is added to "
     "your context on every prompt. Before the first file edit of a task, call "
     "claim_work once with the task and the files you expect to change. "
@@ -97,7 +97,7 @@ INSTRUCTIONS = (
 TOOL = {
     "name": "record_decision",
     "description": (
-        "Record one project decision in the team contract, so every teammate's AI "
+        "Record one project decision in the shared contract, so every teammate's AI "
         "agent sees it before writing code. Call this BEFORE writing code, each "
         "time you choose a framework, library or database, define an API endpoint "
         "or its response shape, name a data field, pick a port, or set a "
@@ -136,7 +136,7 @@ PLAN_TOOL = {
     "name": "check_plan",
     "description": (
         "Review a coding plan before making changes that affect teammates. Returns "
-        "contradictions with the team contract (stop and tell the user) and choices the "
+        "contradictions with the shared contract (stop and tell the user) and choices the "
         "team has not made yet (usually: decide, then record_decision). A review does not "
         "change the contract."
     ),
@@ -202,7 +202,7 @@ SHARE_TOOL = {
         "shared, so first commit the files that belong to this task with git (stage the "
         "specific files; leave out secrets and unrelated files). If the reply says the "
         "current branch is the shared branch, call start_task and then share_work again. "
-        "Before pushing, the changed code is checked against the team contract. If the "
+        "Before pushing, the changed code is checked against the shared contract. If the "
         "reply says the code breaks a team decision, nothing was shared: tell the user "
         "which decision and where, and either fix the code or ask the user. "
         "The reply includes the pull request link: give it to the user."
@@ -407,7 +407,7 @@ ROOM_STATUS_TOOL = {
 
 
 def log(message: str) -> None:
-    print(f"team-contract: {message}", file=sys.stderr, flush=True)
+    print(f"coopdev: {message}", file=sys.stderr, flush=True)
 
 
 class ContractChanged(ValueError):
@@ -444,7 +444,7 @@ def post(path: str, arguments: dict | None) -> dict:
             raise ContractChanged(detail) from error
         raise ValueError(f"The server rejected the request ({error.code}): {detail}") from error
     except Exception as error:
-        raise ValueError(f"Could not reach the team contract server at {server} ({error!r}).") from error
+        raise ValueError(f"Could not reach the shared contract server at {server} ({error!r}).") from error
 
 
 def record_decision(arguments: dict) -> str:
@@ -460,7 +460,7 @@ def record_decision(arguments: dict) -> str:
     conflict = reply.get("conflict")
     if conflict:
         return (
-            "CONFLICT with the team contract. "
+            "CONFLICT with the shared contract. "
             f"{conflict.get('explanation', '')} "
             f"Existing decision: \"{conflict.get('existing_text', '')}\" "
             f"(by {conflict.get('existing_author', 'a teammate')}). "
@@ -473,7 +473,7 @@ def record_decision(arguments: dict) -> str:
     duplicate = reply.get("duplicate")
     if duplicate:
         return (
-            f"Already in the team contract: \"{duplicate.get('text', '')}\" "
+            f"Already in the shared contract: \"{duplicate.get('text', '')}\" "
             f"(by {duplicate.get('author', 'a teammate')}). Nothing new was recorded. "
             "Follow the existing decision."
         )
@@ -486,7 +486,7 @@ def record_decision(arguments: dict) -> str:
             "was not compared with the rest of the contract."
         )
     decision = reply["decision"]
-    return f"Recorded in the team contract: [{decision['category']}] {decision['text']} (by {decision['author']}).{note}"
+    return f"Recorded in the shared contract: [{decision['category']}] {decision['text']} (by {decision['author']}).{note}"
 
 
 def check_plan(arguments: dict) -> str:
@@ -511,7 +511,7 @@ def run_git_helper(*args: str) -> str:
     script's own stdout is reserved for protocol messages.
     """
     if not GIT_HELPER.is_file():
-        raise ValueError("coord/git_sync.py is missing. Rerun the Team Contract installer.")
+        raise ValueError("coord/git_sync.py is missing. Rerun the CoopDev installer.")
     try:
         run = subprocess.run(
             [sys.executable, str(GIT_HELPER), *args],
@@ -692,7 +692,7 @@ def team_status(arguments: dict) -> str:
     try:
         from summary import describe
     except ImportError:
-        raise ValueError("coord/summary.py is missing. Rerun the Team Contract installer.") from None
+        raise ValueError("coord/summary.py is missing. Rerun the CoopDev installer.") from None
     me = read_me()
     dashboard = me["server"] + "/app?" + urllib.parse.urlencode({"room": me["room"]})
     return (describe(post("/state", None), me["name"], dashboard)
@@ -734,7 +734,7 @@ def handle(message: dict) -> dict | None:
             {
                 "protocolVersion": params.get("protocolVersion", "2024-11-05"),
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "team-contract", "version": "0.3.0"},
+                "serverInfo": {"name": "coopdev", "version": "0.3.0"},
                 "instructions": INSTRUCTIONS,
             }
         )

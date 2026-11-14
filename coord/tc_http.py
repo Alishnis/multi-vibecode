@@ -1,9 +1,9 @@
-"""HTTP helper shared by the Team Contract client scripts. Built-in libraries only.
+"""HTTP helper shared by the CoopDev client scripts. Built-in libraries only.
 
 Why this exists: some Python installs (common on macOS) come without a list of
 trusted certificates, so every HTTPS request fails with CERTIFICATE_VERIFY_FAILED
 even though the server is fine. The hooks would then stay silent and the agent
-would work without the team contract.
+would work without the shared contract.
 
 urlopen() below first tries Python's own certificate list. If the certificate
 check fails, it tries again with the operating system's certificate file.

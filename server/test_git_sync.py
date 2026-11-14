@@ -100,7 +100,7 @@ class PublishTest(unittest.TestCase):
                 return subprocess.check_output(["git", *args], cwd=repo, text=True).strip()
 
             git("init", "-q", "-b", "main")
-            git("config", "user.name", "Team Contract Test")
+            git("config", "user.name", "CoopDev Test")
             git("config", "user.email", "test@example.invalid")
             git("commit", "-q", "--allow-empty", "-m", "Initial commit")
             git("init", "-q", "--bare", str(path / "remote.git"))

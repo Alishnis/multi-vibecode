@@ -71,7 +71,7 @@ class ClientDownloadTest(unittest.TestCase):
                 self.assertTrue((project / relative).is_file(), relative)
             hooks = json.loads((project / ".claude/settings.json").read_text())["hooks"]
             self.assertIn("UserPromptSubmit", hooks)
-            self.assertIn("team-contract", json.loads((project / ".mcp.json").read_text())["mcpServers"])
+            self.assertIn("coopdev", json.loads((project / ".mcp.json").read_text())["mcpServers"])
 
     def test_public_homepage_and_legacy_room_links(self):
         client = TestClient(server.app)

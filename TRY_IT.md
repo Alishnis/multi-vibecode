@@ -1,4 +1,4 @@
-# Try Team Contract with two terminals
+# Try CoopDev with two terminals
 
 A real-world rehearsal on one Mac. Two folders play two teammates, **Ali** and **Mei**, each with their own Claude Code in their own terminal. Every step says what to type and **what is supposed to happen**. Takes about 30 minutes.
 
@@ -9,7 +9,7 @@ A real-world rehearsal on one Mac. Two folders play two teammates, **Ali** and *
 Tips before you start:
 
 - Inside Claude Code, a line that starts with `!` runs as a shell command, for example `!git status`. You never have to leave Claude.
-- Claude Code asks before it uses a tool. When it asks about a `team-contract` tool, choose **Yes** (or "Yes, and don't ask again" to go faster).
+- Claude Code asks before it uses a tool. When it asks about a `coopdev` tool, choose **Yes** (or "Yes, and don't ask again" to go faster).
 - The hosted server is free: it sleeps after about 15 idle minutes and forgets rooms when it restarts. If you take a long break, start again from step 0.
 - Room name used below: `tc-trial-7319`. Use exactly this in every command.
 
@@ -59,7 +59,7 @@ Answer the questions like this:
 | Keep merged code up to date while your workspace is open? | **Enter** (no) |
 | Open your workspace now? | **n** |
 
-**Expect:** "server reached: room tc-trial-7319 has 0 decision(s)", a list of OK/CHECK lines (a CHECK for `gh` or GitHub is fine), then "Ready. Next time, in this folder, run: ./tc work".
+**Expect:** "server reached: room tc-trial-7319 has 0 decision(s)", a list of OK/CHECK lines (a CHECK for `gh` or GitHub is fine), then "Ready. Next time, in this folder, run: ./coopdev work".
 
 **Terminal B:** the same, as Mei:
 
@@ -79,7 +79,7 @@ Now start Claude Code in **both** terminals:
 claude
 ```
 
-**Expect:** Claude Code asks whether you trust the folder (yes) and whether to use the `team-contract` server from `.mcp.json` (yes). If it asks to approve project hooks, approve them.
+**Expect:** Claude Code asks whether you trust the folder (yes) and whether to use the `coopdev` server from `.mcp.json` (yes). If it asks to approve project hooks, approve them.
 
 **Dashboard:** "Connect your project" is ticked.
 
@@ -93,8 +93,8 @@ Type to Claude:
 
 **Expect in Terminal A:**
 
-1. Claude calls **team-contract claim_work** for `src/todos.py` (approve it). Reply: "Claimed … No teammate has claimed these files. Go ahead."
-2. It may call **record_decision**, for example "Todo items have id, title and done fields." Reply: "Recorded in the team contract".
+1. Claude calls **coopdev claim_work** for `src/todos.py` (approve it). Reply: "Claimed … No teammate has claimed these files. Go ahead."
+2. It may call **record_decision**, for example "Todo items have id, title and done fields." Reply: "Recorded in the shared contract".
 3. It writes `src/todos.py`.
 
 **Expect on the dashboard (within a few seconds):**
@@ -122,7 +122,7 @@ Now push it. Type:
 **Expect:** the write is **blocked before it happens**. The terminal shows a block like:
 
 ```text
-[Team Contract: ACTIVE COLLISION]
+[CoopDev: ACTIVE COLLISION]
 File: src/todos.py
   Ali claimed this for "…"
   Ali edited this file (1 min ago): Adds a todo module …
@@ -204,7 +204,7 @@ Check: `!ls src` in Terminal B shows no `todos.py`.
 
 > Add a mark_done(todo_id) function to src/todos.py.
 
-**Expect:** Claude claims the file (it is free now), reads it and edits it **with no overlap warning**. Ali's version is in Mei's Git history, so Team Contract knows she already has his change. The dashboard shows Mei's claim and her edit.
+**Expect:** Claude claims the file (it is free now), reads it and edits it **with no overlap warning**. Ali's version is in Mei's Git history, so CoopDev knows she already has his change. The dashboard shows Mei's claim and her edit.
 
 *Contrast:* in step 3, without the pull, the same file was blocked.
 
@@ -218,13 +218,13 @@ Check: `!ls src` in Terminal B shows no `todos.py`.
 
 > We will use FastAPI for the backend. Record that as a team decision.
 
-**Expect:** **record_decision**: "Recorded in the team contract: [stack] Backend is FastAPI…". It appears under **Team decisions**.
+**Expect:** **record_decision**: "Recorded in the shared contract: [stack] Backend is FastAPI…". It appears under **Team decisions**.
 
 **Terminal B:**
 
 > Set up the backend with Express on port 3000.
 
-**Expect:** Claude calls **record_decision** for Express and gets **CONFLICT with the team contract**: FastAPI was already chosen. Claude **stops and asks you** instead of writing Express code. The dashboard shows a red **Decision conflicts** card: "Mei's AI wanted … Express", "Team already decided … FastAPI".
+**Expect:** Claude calls **record_decision** for Express and gets **CONFLICT with the shared contract**: FastAPI was already chosen. Claude **stops and asks you** instead of writing Express code. The dashboard shows a red **Decision conflicts** card: "Mei's AI wanted … Express", "Team already decided … FastAPI".
 
 **Browser:** on the conflict card press **Keep this** under FastAPI, then enter your name and the team key.
 
@@ -237,7 +237,7 @@ Check: `!ls src` in Terminal B shows no `todos.py`.
 **Terminal A:**
 
 ```text
-!./tc today
+!./coopdev today
 ```
 
 **Expect** plain sections, for example:
@@ -258,9 +258,9 @@ Next step: start a task: open Claude and say what you want to build. It claims t
 Dashboard: https://team-contract.onrender.com/app?room=tc-trial-7319
 ```
 
-**Terminal B:** `!./tc today` shows the same room from Mei's side. Her own claim appears under **Your work**.
+**Terminal B:** `!./coopdev today` shows the same room from Mei's side. Her own claim appears under **Your work**.
 
-Also try `!./tc help`, which lists every word, and `!./tc todya`, which answers "I don't know 'todya'" and shows the list.
+Also try `!./coopdev help`, which lists every word, and `!./coopdev todya`, which answers "I don't know 'todya'" and shows the list.
 
 **Dashboard:** the setup list shows 4 of 5 done. Only "Connect GitHub (optional)" is left.
 
@@ -282,9 +282,9 @@ rm -rf ~/tc-trial
 
 | What you see | Why, and what to do |
 | --- | --- |
-| No `team-contract` tools are called at all | Claude Code was started before the install finished, or the server was not approved. Exit Claude, run `claude` again, and approve `team-contract`. |
-| `[Team Contract: CHECK UNAVAILABLE]` | The server is asleep or unreachable. Open the dashboard to wake it, then retry. |
-| Step 3 writes the file anyway | Check that both folders joined the **same** room (`!./tc today` prints the room) and that you approved the hooks. |
+| No `coopdev` tools are called at all | Claude Code was started before the install finished, or the server was not approved. Exit Claude, run `claude` again, and approve `coopdev`. |
+| `[CoopDev: CHECK UNAVAILABLE]` | The server is asleep or unreachable. Open the dashboard to wake it, then retry. |
+| Step 3 writes the file anyway | Check that both folders joined the **same** room (`!./coopdev today` prints the room) and that you approved the hooks. |
 | Step 7 shows no conflict | The dashboard footer says whether the conflict check is on. If it is OFF, the server has no AI key. |
 | The dashboard looks unstyled | Reload once with Cmd+Shift+R. |
 | Everything vanished from the dashboard | The free server restarted and lost the room. Start again from step 0. |

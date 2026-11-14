@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Link a Team Contract room to GitHub and publish committed task work."""
+"""Link a CoopDev room to GitHub and publish committed task work."""
 
 import argparse
 import getpass
@@ -24,7 +24,7 @@ CLI = "python3 coord/git_sync.py"
 
 
 def notice(message: str) -> None:
-    print(f"[Team Contract] {message}", flush=True)
+    print(f"[CoopDev] {message}", flush=True)
 
 
 def command(*args: str) -> str:
@@ -97,9 +97,9 @@ def api(me: dict, method: str, path: str, body: dict | None = None, token: str =
         with urlopen(request, timeout=timeout, handlers=(NoRedirect(),)) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
-        raise ValueError(f"Team Contract request failed (HTTP {error.code}): {error.read().decode()[:300]}") from None
+        raise ValueError(f"CoopDev request failed (HTTP {error.code}): {error.read().decode()[:300]}") from None
     except urllib.error.URLError as error:
-        raise ValueError(f"Could not reach Team Contract: {error.reason}") from None
+        raise ValueError(f"Could not reach CoopDev: {error.reason}") from None
 
 
 def approval_token() -> str:
@@ -196,7 +196,7 @@ def publish(repo: str, branch: str, base: str, ahead: int, title: str | None, re
         try:
             url = command(
                 "gh", "pr", "create", "--repo", f"github.com/{repo}", "--base", base, "--head", branch,
-                *([] if ready else ["--draft"]), f"--title={title}", "--body", "Task branch shared with Team Contract.",
+                *([] if ready else ["--draft"]), f"--title={title}", "--body", "Task branch shared with CoopDev.",
             )
             return {"number": int(url.rstrip("/").rsplit("/", 1)[1]), "url": url, "isDraft": not ready}
         except ValueError as error:
@@ -226,7 +226,7 @@ def contract_findings(me: dict, branch: str, ref: str) -> list[dict]:
     Sends the changed lines (up to SHARE_DIFF_LIMIT characters) to the server.
     Set "check_code": false in coord/me.json, or pass --no-check, to send nothing.
     """
-    # Team Contract's own setup files are not project code.
+    # CoopDev's own setup files are not project code.
     scope = ("--", ".", ":(exclude)coord", ":(exclude).claude", ":(exclude).mcp.json")
     files = command("git", "diff", "--name-only", f"{ref}...HEAD", *scope).splitlines()
     diff = command("git", "diff", "--no-color", "--unified=2", f"{ref}...HEAD", *scope)
@@ -588,10 +588,10 @@ def main() -> None:
     try:
         config = PROJECT / "coord/me.json"
         if not config.is_file():
-            raise ValueError("Install Team Contract for this project first. See Connect your project in the room dashboard.")
+            raise ValueError("Install CoopDev for this project first. See Connect your project in the room dashboard.")
         me = json.loads(config.read_text())
         if command("git", "rev-parse", "--show-toplevel") != str(PROJECT):
-            raise ValueError("Install Team Contract at the root of the Git repository.")
+            raise ValueError("Install CoopDev at the root of the Git repository.")
         if args.action == "create":
             create_repository(me, args.repository)
         elif args.action == "link":
@@ -606,7 +606,7 @@ def main() -> None:
             sync(me, origin_repository(), args.action, getattr(args, "title", None), getattr(args, "ready", False),
                  check=not getattr(args, "no_check", False), anyway=getattr(args, "anyway", False))
     except (OSError, ValueError, KeyError) as error:
-        sys.exit(f"[Team Contract] {error}")
+        sys.exit(f"[CoopDev] {error}")
     except KeyboardInterrupt:
         print()
         notice("Stopped.")

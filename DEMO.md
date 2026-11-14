@@ -1,4 +1,4 @@
-# Team Contract demo
+# CoopDev demo
 
 ## Before presenting
 
@@ -20,21 +20,21 @@
 
 ## Copy and paste prompts
 
-**Baseline.** Start in two empty folders without Team Contract installed. Run the same prompt in both and change only the last word from Python to JavaScript.
+**Baseline.** Start in two empty folders without CoopDev installed. Run the same prompt in both and change only the last word from Python to JavaScript.
 
 > Set up the backend for our team's todo app, with one endpoint that lists todos. Create only the minimal starter files. Do not install anything or run any commands. I'm most comfortable with Python.
 
 **Ali.**
 
-> Record one team-contract decision: The todo backend uses FastAPI on port 18763.
+> Record one coopdev decision: The todo backend uses FastAPI on port 18763.
 
 **Teammate.**
 
 > What framework and port did the team choose for the todo backend?
 
-> Propose switching the todo backend to Express through the team-contract tool. Do not write any code.
+> Propose switching the todo backend to Express through the coopdev tool. Do not write any code.
 
-To show a change of mind instead, select **Switch to this** on a conflict card. Then ask Ali's session “What changed in the team contract since my last prompt?” It should name the retired decision and its replacement.
+To show a change of mind instead, select **Switch to this** on a conflict card. Then ask Ali's session “What changed in the shared contract since my last prompt?” It should name the retired decision and its replacement.
 
 For an API rehearsal, have Ali also record “GET /todos returns a JSON object containing an items array.” Ask Teammate to propose changing it to a bare JSON array through the tool.
 
@@ -52,4 +52,4 @@ To resume, use [AgentMash's setup guide](https://agentmash.dev/docs/setup) and s
 2. In session B, ask for the framework, port, and response shape without including the answers. Record what it can recover, where the information came from, and whether it was supplied automatically or queried.
 3. Propose Express and a bare array before writing code. Record whether AgentMash warns about either proposal, and whether it identifies the earlier decision.
 
-AgentMash documents warnings for overlapping file edits and changes to shared code symbols. Describe what Team Contract demonstrated until the signed-in comparison establishes how both products handle this scenario. [AgentMash conflict docs](https://agentmash.dev/docs/conflicts)
+AgentMash documents warnings for overlapping file edits and changes to shared code symbols. Describe what CoopDev demonstrated until the signed-in comparison establishes how both products handle this scenario. [AgentMash conflict docs](https://agentmash.dev/docs/conflicts)

@@ -105,7 +105,7 @@ class ShortcutTest(unittest.TestCase):
     def test_plain_words_work_and_unknown_words_get_the_list(self):
         code, text = self.run_menu("help")
         self.assertEqual(code, 0)
-        self.assertIn("./tc today", text)
+        self.assertIn("./coopdev today", text)
         code, text = self.run_menu("todya")
         self.assertEqual(code, 2)
         self.assertIn('I don\'t know "todya"', text)
@@ -150,20 +150,57 @@ class StatusToolTest(unittest.TestCase):
 
 
 class LauncherInstallTest(unittest.TestCase):
-    def test_the_installer_adds_a_runnable_tc_and_keeps_a_projects_own_tc(self):
+    def test_installing_into_home_is_rejected_before_any_files_are_written(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            with patch.object(Path, "home", return_value=home), \
+                    patch("sys.argv", ["install.py", str(home)]):
+                with self.assertRaises(SystemExit):
+                    install.main()
+            self.assertEqual(list(home.iterdir()), [])
+
+    def test_the_installer_adds_both_shortcuts_and_preserves_custom_scripts(self):
         with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
             project = Path(directory)
             install.copy_files(project)
-            launcher = project / "tc"
+            self.assertTrue((project / "tc").stat().st_mode & stat.S_IXUSR)
+            launcher = project / "coopdev"
             self.assertTrue(launcher.stat().st_mode & stat.S_IXUSR)
             self.assertTrue((project / "coord/summary.py").is_file())
             (project / "coord/me.json").write_text(json.dumps({"name": "Ali", "room": "demo", "server": "http://x"}))
             run = subprocess.run([str(launcher), "help"], capture_output=True, text=True, timeout=30, cwd="/")
             self.assertEqual(run.returncode, 0, run.stderr)       # works from any folder
-            self.assertIn("./tc today", run.stdout)
+            self.assertIn("./coopdev today", run.stdout)
+            (project / "tc").write_text("#!/bin/sh\necho legacy custom script\n")
             launcher.write_text("#!/bin/sh\necho our own build script\n")
             install.copy_files(project)
             self.assertIn("our own build script", launcher.read_text())
+            self.assertIn("legacy custom script", (project / "tc").read_text())
+
+    def test_upgrade_migrates_legacy_connection_and_shortcut(self):
+        with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
+            project = Path(directory)
+            ours = install.read_json(install.SOURCE / ".mcp.json")["mcpServers"]["coopdev"]
+            config = {"mcpServers": {"team-contract": ours, "other": {"command": "other"}}}
+            install.write_json(project / ".mcp.json", config)
+            (project / "tc").write_text("#!/bin/sh\n# Team Contract shortcut\n")
+            install.add_tool(project)
+            install.copy_files(project)
+            saved = install.read_json(project / ".mcp.json")["mcpServers"]
+            self.assertEqual(saved, {"coopdev": ours, "other": {"command": "other"}})
+            self.assertIn("CoopDev shortcut", (project / "tc").read_text())
+            self.assertFalse((project / ".claude/settings.local.json").exists())
+            install.add_tool(project)  # reinstall is idempotent
+            self.assertEqual(install.read_json(project / ".mcp.json")["mcpServers"], saved)
+
+    def test_existing_unrelated_coopdev_connection_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            config = {"mcpServers": {"coopdev": {"command": "another-tool"}}}
+            install.write_json(project / ".mcp.json", config)
+            with self.assertRaises(SystemExit):
+                install.add_tool(project)
+            self.assertEqual(install.read_json(project / ".mcp.json"), config)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Team workspace · Team Contract</title>
+<title>Team workspace · CoopDev</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@300..800&display=swap">
@@ -12,21 +12,24 @@
   /* Team workspace. Tokens and the floating bar come from /design.css. */
   [hidden] { display: none !important; }
   ul { list-style: none; margin: 0; padding: 0; }
-  .page { width: min(1280px, 100% - 64px); margin: 0 auto; padding: 44px 0 56px; }
-  .am-bar { width: min(1280px, 100% - 64px); }
+  .page { width: min(1280px, 100% - 64px); margin: 0 auto; padding: 22px 0 36px; }
+  .am-bar { width: min(1280px, 100% - 64px); height: 52px; top: 12px; margin-top: 12px; border-radius: 16px; }
+  .am-links { gap: 20px; }
+  .am-logo { font-size: 15px; }
+  .am-bar-end .control { min-height: 34px; }
   .am-links a[aria-current] { color: var(--am-blue-ink); font-weight: 600; }
 
-  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 18px 24px; margin-bottom: 26px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; margin-bottom: 18px; }
   .eyebrow {
-    display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 5px 12px; border-radius: 999px;
-    background: var(--am-blue-soft); color: var(--am-blue-ink); font: 600 13px/18px var(--am-font);
+    display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 0; border-radius: 0;
+    background: transparent; color: var(--am-blue-ink); font: 600 13px/18px var(--am-font);
   }
   .eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--am-blue); }
-  h1 { margin: 14px 0 0; color: var(--am-ink); font: 500 clamp(34px, 5vw, 56px)/1.05 var(--am-font); letter-spacing: -.04em; overflow-wrap: anywhere; }
+  h1 { margin: 5px 0 0; color: var(--am-ink); font: 600 clamp(23px, 2.7vw, 32px)/1.2 var(--am-font); letter-spacing: -.04em; overflow-wrap: anywhere; }
   .header-actions, .workspace-actions, .repo-actions, .git-links { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
   .copy-feedback { color: var(--am-quiet); font-size: 13px; }
   .live {
-    display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #fff;
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; background: #fff;
     border: 1px solid var(--am-line); color: var(--am-quiet); font: 600 13px/18px var(--am-font); box-shadow: var(--am-shadow-float);
   }
   .live .dot { width: 8px; height: 8px; background: var(--am-green); animation: pulse 2s infinite; }
@@ -36,15 +39,15 @@
 
   /* buttons */
   .control, .action, footer button {
-    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 9px 18px 12px;
-    border: 1px solid var(--am-blue-line); border-radius: 12px; color: var(--am-ink); text-decoration: none;
-    background: var(--am-grad-white); box-shadow: var(--am-edge-soft); font: 600 14px/19px var(--am-font); letter-spacing: -.01em;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 7px 12px;
+    border: 1px solid var(--am-blue-line); border-radius: 8px; color: var(--am-ink); text-decoration: none;
+    background: #fff; box-shadow: 0 1px 2px rgb(18 51 120 / .04); font: 600 14px/19px var(--am-font); letter-spacing: -.01em;
     transition: transform .15s var(--am-ease), filter .15s;
   }
   .control:hover, .action:hover, footer button:hover { transform: translateY(-1px); filter: brightness(1.03); }
   .control:active, .action:active { transform: translateY(1px); }
   .control.primary, .answer-primary {
-    color: #fff; border: 0; background: var(--am-sheen), var(--am-grad-blue); box-shadow: var(--am-edge-blue-sm), var(--am-shadow-lift);
+    color: #fff; border: 0; background: var(--am-blue-ink); box-shadow: 0 1px 2px rgb(18 51 120 / .08);
   }
   .action:disabled { cursor: wait; opacity: .6; }
   .action.small { min-height: 30px; padding: 4px 12px 7px; border-radius: 10px; font-size: 12.5px; box-shadow: inset 0 -2px 0 #a9cbf5, inset 0 1px 0 #fff; }
@@ -54,32 +57,32 @@
   /* project workspace card */
   .workspace {
     display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1fr); align-items: center; gap: 18px 28px; margin-bottom: 18px;
-    padding: 30px 34px; border: 1px solid var(--am-line); border-radius: 28px; box-shadow: var(--am-shadow-card);
+    padding: 16px 20px; border: 1px solid var(--am-line); border-radius: 14px; box-shadow: none;
     background: radial-gradient(60% 120% at 100% 0%, var(--am-blue-soft-2), transparent 70%), #fff;
   }
-  .workspace h2 { margin: 0 0 6px; color: var(--am-ink); font: 500 26px/1.2 var(--am-font); letter-spacing: -.03em; }
-  .workspace p { margin: 0; max-width: 48ch; font-size: 15px; line-height: 1.6; }
+  .workspace h2 { margin: 0 0 6px; color: var(--am-ink); font: 600 18px/1.3 var(--am-font); letter-spacing: -.03em; }
+  .workspace p { margin: 0; max-width: 48ch; font-size: 13px; line-height: 1.5; }
   .workspace-actions { justify-content: flex-end; }
 
-  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0 0 22px; }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
   .metric {
-    position: relative; margin: 0; padding: 22px 24px; min-width: 0; background: #fff; border: 1px solid var(--am-line);
-    border-radius: 24px; box-shadow: var(--am-shadow-card);
+    position: relative; margin: 0; padding: 14px 18px; min-width: 0; background: #fff; border: 1px solid var(--am-line);
+    border-radius: 14px; box-shadow: none;
   }
-  .metric::before { content: ""; display: block; width: 10px; height: 10px; margin-bottom: 14px; border-radius: 50%; background: var(--am-blue); }
+  .metric::before { content: ""; position: absolute; right: 16px; top: 17px; width: 7px; height: 7px; border-radius: 50%; background: var(--am-blue); }
   .metric:nth-child(2)::before { background: var(--am-ember); }
   .metric:nth-child(3)::before { background: var(--am-codex); }
   .metric:nth-child(4)::before { background: var(--am-claude); }
   .metric dt { color: var(--am-quiet); font: 500 13px/18px var(--am-font); }
-  .metric dd { margin: 4px 0 0; color: var(--am-ink); font: 500 44px/1.05 var(--am-font); letter-spacing: -.04em; }
+  .metric dd { margin: 4px 0 0; color: var(--am-ink); font: 600 28px/1.1 var(--am-font); letter-spacing: -.04em; }
 
-  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-  .column { display: grid; min-width: 0; gap: 20px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .column { display: grid; min-width: 0; gap: 16px; }
   .panel {
-    min-width: 0; padding: 26px; overflow-wrap: anywhere; background: #fff; border: 1px solid var(--am-line);
-    border-radius: 24px; box-shadow: var(--am-shadow-card);
+    min-width: 0; padding: 18px; overflow-wrap: anywhere; background: #fff; border: 1px solid var(--am-line);
+    border-radius: 14px; box-shadow: none;
   }
-  .panel > h2, h2 { margin: 0 0 14px; color: var(--am-ink); font: 600 19px/1.3 var(--am-font); letter-spacing: -.02em; }
+  .panel > h2, h2 { margin: 0 0 14px; color: var(--am-ink); font: 600 16px/1.3 var(--am-font); letter-spacing: -.02em; }
   h2 .count { margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: var(--am-blue-soft); color: var(--am-blue-ink); font-size: 12px; font-weight: 600; vertical-align: 2px; }
   #conflicts, #requests { border-color: var(--am-ember-line); background: linear-gradient(180deg, #fffaf7, #fff 60%); }
   #conflicts h2 { color: #9b3a12; }
@@ -89,7 +92,7 @@
 
   /* rows are soft inset cards, as in the product windows */
   .decision, .file-row, .git-row, .event, .retired-row {
-    margin-bottom: 10px; padding: 14px 16px; background: var(--am-inset); border-radius: 16px;
+    margin-bottom: 8px; padding: 10px 12px; background: var(--am-inset); border-radius: 16px;
   }
   .decision:last-child, .file-row:last-child, .git-row:last-child, .event:last-child { margin-bottom: 0; }
   .decision { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 14px; align-items: center; }
@@ -114,24 +117,27 @@
   .who-line code { background: #fff; border: 1px solid var(--am-line); border-radius: 8px; padding: 1px 8px; }
 
   /* setup checklist */
-  .checklist { margin-bottom: 18px; padding: 26px 30px; background: #fff; border: 1px solid var(--am-blue-line); border-radius: 28px; box-shadow: var(--am-shadow-card); }
+  .checklist { margin-bottom: 16px; padding: 16px 20px; background: #fff; border: 1px solid var(--am-blue-line); border-radius: 14px; box-shadow: none; }
   .checklist-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-  .checklist-head h2 { margin: 0 0 2px; }
-  .progress { height: 8px; margin: 14px 0 18px; background: var(--am-blue-soft); border-radius: 999px; overflow: hidden; }
+  .checklist-head h2 { margin: 0; }
+  .checklist-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+  .checklist-heading .meta { margin: 0; }
+  .checklist:not(.expanded) #checklist-steps li:not(.next) { display: none; }
+  .progress { height: 4px; margin: 10px 0 12px; background: var(--am-blue-soft); border-radius: 999px; overflow: hidden; }
   .progress span { display: block; height: 100%; width: 0; background: var(--am-grad-blue); border-radius: inherit; transition: width .4s var(--am-ease); }
   #checklist-steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-  #checklist-steps li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 14px; background: var(--am-inset); border-radius: 16px; }
+  #checklist-steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; background: var(--am-inset); border-radius: 10px; }
   #checklist-steps li.next { background: var(--am-blue-soft); }
-  #checklist-steps strong { color: var(--am-ink); font-weight: 600; }
+  #checklist-steps strong { color: var(--am-ink); font-weight: 600; font-size: 14px; }
   #checklist-steps .hint { margin: 2px 0 0; }
-  .tick { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: #fff; border: 1px solid var(--am-line-hi); color: var(--am-quiet); font-weight: 700; }
+  .tick { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: #fff; border: 1px solid var(--am-line-hi); color: var(--am-quiet); font-weight: 700; }
   li.done .tick { background: var(--am-green-soft); border-color: #c5ead4; color: var(--am-green-ink); }
   li.done strong { color: var(--am-quiet); }
   li.next .tick { background: var(--am-grad-blue); border: 0; color: #fff; }
 
   /* team chat */
   #messages { display: grid; gap: 8px; max-height: 340px; overflow-y: auto; margin: 12px 0; padding-right: 2px; }
-  .msg { padding: 12px 14px; background: var(--am-inset); border-radius: 16px; }
+  .msg { padding: 10px 12px; background: var(--am-inset); border-radius: 10px; }
   .msg .who-line { margin-top: 0; }
   .msg .who-line strong { color: var(--am-ink); font-weight: 600; }
   .msg-text { margin-top: 6px; color: var(--am-ink); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -213,7 +219,7 @@
   /* dialogs */
   dialog { width: min(520px, calc(100% - 32px)); padding: 30px; color: var(--am-ink); background: #fff; border: 1px solid var(--am-line); border-radius: 28px; box-shadow: var(--am-shadow-window); }
   dialog::backdrop { background: rgb(8 24 60 / .38); backdrop-filter: blur(5px); }
-  dialog h2 { margin: 0 0 10px; font: 500 26px/1.2 var(--am-font); letter-spacing: -.035em; }
+  dialog h2 { margin: 0 0 10px; font: 600 18px/1.3 var(--am-font); letter-spacing: -.035em; }
   dialog p.meta { margin: 0 0 6px; font-size: 14px; overflow-wrap: anywhere; }
   dialog label { display: block; margin: 14px 0; color: var(--am-ink); font: 600 13px/18px var(--am-font); }
   dialog input, dialog textarea {
@@ -253,14 +259,20 @@
     .ask-row, .chat-form { grid-template-columns: minmax(0, 1fr); }
     #checklist-steps li { grid-template-columns: 34px minmax(0, 1fr); }
     #checklist-steps li > button { grid-column: 2; justify-self: start; }
-    .checklist { padding: 20px; }
+    .checklist { padding: 14px; }
     .page, .am-bar { width: calc(100% - 28px); }
-    .page { padding-top: 28px; }
-    .panel, .workspace { padding: 20px; }
+    .page { padding-top: 18px; }
+    .am-bar { height: auto; min-height: 52px; flex-wrap: wrap; padding: 10px 12px; gap: 10px; }
+    .am-bar .am-links { display: flex; order: 3; width: 100%; overflow-x: auto; gap: 18px; padding-bottom: 4px; }
+    .am-bar .am-links a { flex: none; padding: 6px 0; }
+    .am-bar-end { margin-left: auto; }
+    .header-actions { gap: 8px; }
+    .control { min-height: 40px; }
+    .panel, .workspace { padding: 16px; }
     .sides { grid-template-columns: minmax(0, 1fr); }
     .decision { grid-template-columns: minmax(0, 1fr); gap: 8px; }
     .decision .retire { justify-self: start; }
-    .metric { padding: 18px; } .metric dd { font-size: 36px; }
+    .metric { padding: 14px; } .metric dd { font-size: 26px; }
     .column { display: contents; }
     dialog { padding: 22px; }
   }
@@ -268,7 +280,7 @@
 </head>
 <body>
 <nav class="am-bar" aria-label="Room navigation">
-  <a class="am-logo" href="/"><span class="am-mark" aria-hidden="true">TC</span>team contract</a>
+  <a class="am-logo" href="/"><span class="am-mark" aria-hidden="true">CD</span>CoopDev</a>
   <div class="am-links">
     <a href="#overview" aria-current="location">overview</a>
     <a href="#claim-panel">claims</a>
@@ -278,7 +290,7 @@
     <a href="#contract">decisions</a>
     <a href="#file-panel">edits</a>
   </div>
-  <div class="am-bar-end"><a class="am-btn sm soft" href="/#setup">add a teammate</a></div>
+  <div class="am-bar-end"><button type="button" class="control" data-guide="setup">Setup guide</button></div>
 </nav>
 <main class="page" id="overview">
   <header>
@@ -293,8 +305,8 @@
 
   <section class="checklist" id="checklist" aria-labelledby="checklist-title" hidden>
     <div class="checklist-head">
-      <div><h2 id="checklist-title">Get your team set up</h2><p class="meta" id="checklist-progress"></p></div>
-      <button type="button" class="action small retire" id="checklist-hide">Hide</button>
+      <div class="checklist-heading"><h2 id="checklist-title">Team setup</h2><p class="meta" id="checklist-progress"></p></div>
+      <button type="button" class="action small" id="checklist-hide" aria-expanded="false" aria-controls="checklist-steps">Show all steps</button>
     </div>
     <div class="progress" aria-hidden="true"><span id="checklist-bar"></span></div>
     <ol id="checklist-steps"></ol>
@@ -489,12 +501,12 @@
   function inviteText() {
     const dashboard = `${location.origin}/app?${new URLSearchParams({room})}`;
     return [
-      `Join our Team Contract room "${room}", so our coding agents share decisions and warn each other before editing the same files.`,
+      `Join our CoopDev room "${room}", so our coding agents share decisions and warn each other before editing the same files.`,
       "",
       "1. Open Terminal in your copy of the project folder.",
       "2. Paste this and answer the questions:",
       `   curl -fsSL ${shellQuote(location.origin + "/install.sh")} | bash -s -- --room ${shellQuote(room)} --server ${shellQuote(location.origin)}`,
-      "3. Open Claude Code in that folder and allow the team-contract tool when asked.",
+      "3. Open Claude Code in that folder and allow the coopdev tool when asked.",
       "",
       `Team dashboard: ${dashboard}`,
     ].join("\n");
@@ -517,20 +529,20 @@
     const guides = {
       menu: {
         title: "Everyday shortcuts",
-        intro: "In Terminal, inside your project folder. Type ./tc on its own to see every action as a numbered menu.",
+        intro: "In Terminal, inside your project folder. Type ./coopdev on its own to see every action as a numbered menu.",
         steps: [
-          ["What's going on?", "Who is working on what, anything that needs you, and one next step.", "./tc today"],
-          ["Open your workspace", "Opens Claude, and keeps your shared branch updated if you turned that on during setup.", "./tc work"],
-          ["Everything else", "Start a task, share, get the latest code, see claims, check your setup.", "./tc"],
+          ["What's going on?", "Who is working on what, anything that needs you, and one next step.", "./coopdev today"],
+          ["Open your workspace", "Opens Claude, and keeps your shared branch updated if you turned that on during setup.", "./coopdev work"],
+          ["Everything else", "Start a task, share, get the latest code, see claims, check your setup.", "./coopdev"],
         ],
       },
       setup: {
         title: "Connect your project",
         intro: "One command, then answer a few questions. You need Python 3 and curl, on Mac or Linux.",
         steps: [
-          ["Join this room", "Open Terminal inside your project folder, paste this, and follow the questions. It installs Team Contract, asks your name, can connect GitHub, and can open Claude for you.",
+          ["Join this room", "Open Terminal inside your project folder, paste this, and follow the questions. It installs CoopDev, asks your name, can connect GitHub, and can open Claude for you.",
            `curl -fsSL ${shellQuote(location.origin + "/install.sh")} | bash -s -- --room ${shellQuote(room)} --server ${shellQuote(location.origin)}`],
-          ["Next time", "In that folder: ./tc work opens Claude, ./tc today shows what is going on.", "./tc today"],
+          ["Next time", "In that folder: ./coopdev work opens Claude, ./coopdev today shows what is going on.", "./coopdev today"],
         ],
       },
       publish: {
@@ -539,7 +551,7 @@
         steps: [
           ["Say this to Claude before you begin", "Claude starts a task branch from the team's latest code. Work you already began comes along.", "start a task for the todo API"],
           ["Say this when it works", "Claude commits this task's files, checks them against the contract, and opens or updates the pull request.", "share my work"],
-          ["Or in Terminal", "./tc start asks for the task in plain words. ./tc share shares what you have committed.", "./tc share"],
+          ["Or in Terminal", "./coopdev start asks for the task in plain words. ./coopdev share shares what you have committed.", "./coopdev share"],
         ],
       },
       sync: {
@@ -547,8 +559,8 @@
         intro: "Easiest: just ask Claude. Your copy is only updated when that is safe, and you are told why when it is not. Your unsaved work is never overwritten.",
         steps: [
           ["Say this to Claude", "Brings merged pull requests into your shared branch.", "get the latest code from the team"],
-          ["Or in Terminal, once", "Does the same thing from Terminal.", "./tc sync"],
-          ["Or keep it updated while you work", "Leave this window open. Press Ctrl+C to stop.", "./tc watch"],
+          ["Or in Terminal, once", "Does the same thing from Terminal.", "./coopdev sync"],
+          ["Or keep it updated while you work", "Leave this window open. Press Ctrl+C to stop.", "./coopdev watch"],
         ],
       },
     };
@@ -558,7 +570,7 @@
     } else {
       guides.setup.steps.push(["Before connecting GitHub", "Set a team key at the bottom of this dashboard. Guided setup will ask for that key when linking your existing repository. You can skip GitHub and connect it later."]);
     }
-    guides.setup.steps.push(["Allow the agent connection", "When Claude opens, sign in if needed, trust your project, and allow the team-contract tool. These choices stay in your hands."]);
+    guides.setup.steps.push(["Allow the agent connection", "When Claude opens, sign in if needed, trust your project, and allow the coopdev tool. These choices stay in your hands."]);
     const guide = guides[kind];
     $("terminal-title").textContent = guide.title;
     $("terminal-intro").textContent = guide.intro;
@@ -1123,7 +1135,13 @@
   });
 
   // A setup list that ticks itself off from what the room already shows.
-  const checklistHidden = () => memory.read("localStorage", "tc-checklist-hidden:" + room) === "1";
+  let checklistExpanded = memory.read("localStorage", "tc-checklist-expanded:" + room) === "1";
+  function updateChecklistExpansion() {
+    $("checklist").classList.toggle("expanded", checklistExpanded);
+    $("checklist-hide").textContent = checklistExpanded ? "Show next step" : "Show all steps";
+    $("checklist-hide").setAttribute("aria-expanded", String(checklistExpanded));
+  }
+  updateChecklistExpansion();
   function renderChecklist(state) {
     const people = state.people || [];
     const steps = [
@@ -1135,7 +1153,7 @@
     ];
     const done = steps.filter(([ok]) => ok).length;
     const card = $("checklist");
-    card.hidden = done === steps.length || checklistHidden();
+    card.hidden = done === steps.length;
     if (card.hidden) return;
     const signature = JSON.stringify(steps.map(([ok]) => ok));
     if (card.dataset.signature === signature) return;
@@ -1162,8 +1180,9 @@
     });
   }
   $("checklist-hide").addEventListener("click", () => {
-    memory.write("localStorage", "tc-checklist-hidden:" + room, "1");
-    $("checklist").hidden = true;
+    checklistExpanded = !checklistExpanded;
+    memory.write("localStorage", "tc-checklist-expanded:" + room, checklistExpanded ? "1" : "0");
+    updateChecklistExpansion();
   });
   $("copy-invite").addEventListener("click", copyInvite);
 

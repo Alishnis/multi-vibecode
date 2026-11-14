@@ -49,7 +49,7 @@ express = (
     '+app.listen(18764)\n'
 )
 regressions = [
-    ("team-contract-check-1794575848.js", True, express),
+    ("coopdev-check-1794575848.js", True, express),
     ("server.js", True, express),
     ("tests/test_todos.py", False,
      "+from django.test import Client\n"

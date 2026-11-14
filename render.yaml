@@ -1,4 +1,4 @@
-# Render Blueprint: puts the team contract server on the internet.
+# Render Blueprint: puts the shared contract server on the internet.
 # In the Render dashboard choose New > Blueprint and pick this repository.
 # Render then asks for OPENROUTER_API_KEY; paste your key there, not here.
 #

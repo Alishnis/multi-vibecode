@@ -11,10 +11,10 @@ for ((i=0; i<${#args[@]}; i++)); do
   esac
 done
 command -v python3 >/dev/null || { echo "Install Python 3 first: https://www.python.org/downloads/"; exit 1; }
-command -v curl >/dev/null || { echo "curl is required to download Team Contract."; exit 1; }
+command -v curl >/dev/null || { echo "curl is required to download CoopDev."; exit 1; }
 folder=$(mktemp -d)
 trap 'rm -rf "$folder"' EXIT
-echo "Downloading Team Contract…"
+echo "Downloading CoopDev…"
 curl -fsSL --retry 2 --connect-timeout 15 --max-time 120 "${server%/}/client.zip" -o "$folder/client.zip"
 python3 -m zipfile -e "$folder/client.zip" "$folder"
 # -r is true even where no terminal exists (CI, some ssh sessions), so try to open it.

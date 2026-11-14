@@ -1,4 +1,8 @@
-# Team Contract session handoff
+# CoopDev rename — November 14, 2026
+
+Branding, terminal notices, page titles/logos, agent identity, download filename and current guides now say CoopDev. New launcher: `./coopdev`; `./tc` still works. Existing hostname/service identifier, API routes, database names, environment settings and persisted state keys are intentionally retained. Installer migrates only matching legacy MCP registrations and does not edit permissions. Historical paths/commit descriptions below remain references to earlier artifacts. Changes are local until published.
+
+# CoopDev session handoff
 
 Updated November 14, 2026, Hong Kong time, after deployment of 3c0cefa.
 
@@ -6,7 +10,7 @@ Updated November 14, 2026, Hong Kong time, after deployment of 3c0cefa.
 
 Committed and deployed as `3c0cefa`. Live homepage, `/app`, legacy room links, health, installer, and shared stylesheet verified; downloaded client files match source byte-for-byte. Tracked source files are clean.
 
-New homepage at `/`; `/app?room=…` and existing `/?room=…` links open the dashboard. Own Team Contract design inspired by the supplied AgentMash screenshot: light background, pill navigation, blue buttons, large typography; matching dashboard and responsive mobile layouts. Homepage generates room/name-specific setup commands and a copyable agent setup prompt. Setup dialogs now foreground the guided command.
+New homepage at `/`; `/app?room=…` and existing `/?room=…` links open the dashboard. Own CoopDev design inspired by the supplied AgentMash screenshot: light background, pill navigation, blue buttons, large typography; matching dashboard and responsive mobile layouts. Homepage generates room/name-specific setup commands and a copyable agent setup prompt. Setup dialogs now foreground the guided command.
 
 `/install.sh` downloads the matching `/client.zip`, uses Python's zip extractor, and runs `install.py --guided` with terminal input restored from `/dev/tty`. Requires Python 3 and curl, Mac/Linux. Existing project settings/preferences are preserved. `coord/team.py --action setup` offers the official Claude installer, GitHub CLI installation via existing Homebrew, GitHub login, linking an existing origin to the room with its team key, a saved auto_sync preference, diagnostics, and workspace launch. It does not initialize/clone a Git repo or install Python/Homebrew. Account sign-in and agent trust remain interactive.
 
@@ -225,7 +229,7 @@ Claude reviewed changes from `1f197bb` to `4c76889`, fixed the issues below, and
 
 The project is for a small student team preparing a five-minute startup pitch. The team is comfortable with Python, has basic Git experience, and wants low-cost OpenRouter calls. Ali has been testing alone. Explain from the beginning, define terms when first used, list the plan before acting, and distinguish verified results from assumptions. Keep secrets out of logs and commits. GitHub review and merge are human actions. Automatic sync is opt-in per checkout.
 
-Team Contract gives independent Claude Code sessions one shared record of project decisions. It can flag a contradiction before code is written, ask a human to settle a missing agreement, warn about overlapping file edits, and show which GitHub branches and PRs teammates have reported. GitHub owns code history. Render owns room state. A new decision reaches Claude on its next prompt. New code reaches a laptop when the teammate chooses to update their checkout.
+CoopDev gives independent Claude Code sessions one shared record of project decisions. It can flag a contradiction before code is written, ask a human to settle a missing agreement, warn about overlapping file edits, and show which GitHub branches and PRs teammates have reported. GitHub owns code history. Render owns room state. A new decision reaches Claude on its next prompt. New code reaches a laptop when the teammate chooses to update their checkout.
 
 ### Earlier changes and rehearsals
 
@@ -250,7 +254,7 @@ The AgentMash 0.14.0 comparison was attempted in two temporary repositories. Age
 | Decision checks | `server/conflicts.py` calls OpenRouter with structured JSON. The existing default is `anthropic/claude-haiku-5.5`, overrideable via `CONTRACT_CHECK_MODEL`. `POST /decisions` saves compatible decisions, returns duplicates, and logs contradictions without saving them. With an unavailable checker, normal writes may be saved unchecked and the response says so. |
 | Plan review and requests | `POST /plans/check` reads decisions and known topics, validates model findings, and returns conflicts and missing agreements without saving them. `POST /decision-requests` creates or reuses an exact `(room, topic)` match. Different topic strings can create separate requests for the same question. |
 | Approval | `POST /decision-requests/{id}/answer` verifies `X-Contract-Token` against the room team key or `CONTRACT_APPROVAL_TOKEN`. It checks the answer against the existing contract and then links the request to a decision in one SQLite transaction. Conflicting or unchecked answers leave the request open. A second approval cannot add a second decision. Use the dashboard to answer missing agreements, settle conflicts, and retire earlier decisions. |
-| Git | `coord/git_sync.py` runs local Git and GitHub CLI. `link` binds an existing GitHub origin and default branch to the room. `create OWNER/REPO` creates a private GitHub repo from a checkout with an initial commit and no origin. `publish` pushes committed task-branch work and opens or reuses a PR. `status` fetches the base branch and reports ahead/behind counts and the open PR. Plain `git push` does not trigger the Team Contract PR flow. Reports are snapshots, refreshed by the command. |
+| Git | `coord/git_sync.py` runs local Git and GitHub CLI. `link` binds an existing GitHub origin and default branch to the room. `create OWNER/REPO` creates a private GitHub repo from a checkout with an initial commit and no origin. `publish` pushes committed task-branch work and opens or reuses a PR. `status` fetches the base branch and reports ahead/behind counts and the open PR. Plain `git push` does not trigger the CoopDev PR flow. Reports are snapshots, refreshed by the command. |
 | Edit warnings | `coord/hooks/file_activity.py` reports successful Edit, Write, MultiEdit, and NotebookEdit calls to `POST /files/edits`. Before a supported edit it checks `POST /files/check` for the same relative path, same room, and a different teammate name within 30 minutes. It emits a terminal `systemMessage` and passes context to Claude. Linked rooms check that the local GitHub origin matches. The warning is advisory. It does not merge, fetch, or block the edit. Shell edits, external editor changes, Codex CLI, and simultaneous edits before the first report are outside this detection. |
 | Server and dashboard | `server/server.py` uses FastAPI and SQLite. Tables cover decisions, conflicts, decision requests, people, repo links, Git activity, and file edits. `server/dashboard.html` is served by the same server and polls `GET /state` about once per second. It displays activity and provides the approval form. Open it over HTTP or HTTPS, since opening the HTML from disk leaves it without the API. |
 
