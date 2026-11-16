@@ -1774,3 +1774,9 @@ def design_css() -> FileResponse:
 def bootstrap() -> FileResponse:
     return FileResponse(PROJECT_ROOT / "server/install.sh", media_type="text/plain",
                         headers={"Cache-Control": "no-store"})
+
+
+# Remote MCP: the agent tools over HTTP, at /mcp/<token>. See server/remote_mcp.py.
+from . import remote_mcp  # noqa: E402
+
+remote_mcp.mount(app, connect=connect, now=now, require_approval=require_approval, room_author_model=RoomAuthor)

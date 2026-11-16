@@ -321,6 +321,7 @@
       <button type="button" class="control primary" data-guide="setup" id="setup-guide">Connect your project</button>
       <button type="button" class="control" data-guide="publish" id="publish-guide" hidden>Share changes</button>
       <button type="button" class="control" data-guide="menu">Terminal shortcuts</button>
+      <button type="button" class="control" id="remote-link">Connect by link</button>
       <button type="button" class="control" data-guide="sync" id="sync-guide" hidden>Sync updates</button>
     </div>
   </section>
@@ -571,7 +572,7 @@
       guides.setup.steps.push(["Before connecting GitHub", "Set a team key at the bottom of this dashboard. Guided setup will ask for that key when linking your existing repository. You can skip GitHub and connect it later."]);
     }
     guides.setup.steps.push(["Allow the agent connection", "When Claude opens, sign in if needed, trust your project, and allow the coopdev tool. These choices stay in your hands."]);
-    const guide = guides[kind];
+    const guide = typeof kind === "object" ? kind : guides[kind];
     $("terminal-title").textContent = guide.title;
     $("terminal-intro").textContent = guide.intro;
     $("command-copy-status").textContent = "";
@@ -668,6 +669,27 @@
       $("confirm-submit").disabled = $("confirm-cancel").disabled = false;
     }
   });
+
+  // A personal remote MCP link: the agent tools with no install (no hooks, no Git).
+  $("remote-link").addEventListener("click", () => askHuman({
+    title: "Make a remote link",
+    text: "Your name is who the link acts as. The link works like a password: anyone who has it can act as you in this room. Making a new link replaces your old one.",
+    button: "Make link",
+    run: async ({author, key}) => {
+      const link = await send("/connectors", {room, author}, key);
+      setTimeout(() => openGuide({
+        title: "Your remote link",
+        intro: `Add this link to your AI app as a remote MCP server. It acts as ${link.name}. Keep it private.`,
+        steps: [
+          ["Your link", "Copy it now. It is shown only once.", link.url],
+          ["Claude app or claude.ai", "Settings → Connectors → Add custom connector. Paste the link as the server URL.", null],
+          ["Claude Code", "Run this in Terminal.", `claude mcp add --transport http coopdev ${shellQuote(link.url)}`],
+          ["Codex", "Add these lines to ~/.codex/config.toml.", `[mcp_servers.coopdev]\nurl = ${JSON.stringify(link.url)}`],
+          ["What works over a link", "Decisions, claims, chat, requests and team status. Edits are not blocked and Git is not available: for those, install CoopDev in the project.", null],
+        ],
+      }), 0);
+    },
+  }));
 
   function settleConflict(c, action) {
     const keep = action === "keep";

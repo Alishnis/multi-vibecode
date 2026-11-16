@@ -304,6 +304,27 @@ Local automated check (uses two temporary installed clients and a local server, 
 .venv/bin/python -B -m unittest server.test_terminal_warnings
 ```
 
+## Connect by link (remote MCP, first version)
+
+No install: an AI app connects to the room with one personal link.
+
+1. On the dashboard press **Connect by link**. Enter your name and the team key.
+2. Copy the link (`https://SERVER/mcp/<token>`). It is shown once and acts as you. Making a new link replaces the old one.
+3. Add it as a remote MCP server:
+   - **Claude app or claude.ai:** Settings → Connectors → Add custom connector, paste the link.
+   - **Claude Code:** `claude mcp add --transport http coopdev 'LINK'`
+   - **Codex:** in `~/.codex/config.toml`, `[mcp_servers.coopdev]` and `url = "LINK"`.
+
+| Over a link | Only with the installed client |
+| --- | --- |
+| `get_contract`, decisions, plans and questions, claims, chat, asks, `team_status` | Edit blocking and edit reports (hooks), the contract added to every prompt, Git tools |
+
+Without hooks the agent is told to call `get_contract` at the start of each task and `claim_work` before editing. Nothing stops an agent that ignores this.
+
+To cut a link off: `POST /connectors/revoke` with `{"room", "author"}` and the team key in `X-Contract-Token`. Only a SHA-256 hash of each token is stored. Each link may make 60 calls a minute. The transport is MCP Streamable HTTP with plain JSON replies; there is no server-sent stream and no session.
+
+Code: `server/remote_mcp.py`. Tests: `server/test_remote_mcp.py`.
+
 
 ## One command for everyday actions
 
