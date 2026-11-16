@@ -14,10 +14,7 @@
   ul { list-style: none; margin: 0; padding: 0; }
   .page { width: min(1280px, 100% - 64px); margin: 0 auto; padding: 22px 0 36px; }
   .am-bar { width: min(1280px, 100% - 64px); height: 52px; top: 12px; margin-top: 12px; border-radius: 16px; }
-  .am-links { gap: 20px; }
   .am-logo { font-size: 15px; }
-  .am-bar-end .control { min-height: 34px; }
-  .am-links a[aria-current] { color: var(--am-blue-ink); font-weight: 600; }
 
   header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 20px; margin-bottom: 18px; }
   .eyebrow {
@@ -38,13 +35,13 @@
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--am-line-hi); flex: none; }
 
   /* buttons */
-  .control, .action, footer button {
+  .control, .action {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 7px 12px;
     border: 1px solid var(--am-blue-line); border-radius: 8px; color: var(--am-ink); text-decoration: none;
     background: #fff; box-shadow: 0 1px 2px rgb(18 51 120 / .04); font: 600 14px/19px var(--am-font); letter-spacing: -.01em;
     transition: transform .15s var(--am-ease), filter .15s;
   }
-  .control:hover, .action:hover, footer button:hover { transform: translateY(-1px); filter: brightness(1.03); }
+  .control:hover, .action:hover { transform: translateY(-1px); filter: brightness(1.03); }
   .control:active, .action:active { transform: translateY(1px); }
   .control.primary, .answer-primary {
     color: #fff; border: 0; background: var(--am-blue-ink); box-shadow: 0 1px 2px rgb(18 51 120 / .08);
@@ -54,27 +51,29 @@
   .retire { color: var(--am-muted); background: #fff; border-color: var(--am-line-hi); box-shadow: none; }
   .retire:hover, .retire:focus-visible { color: var(--am-ember); border-color: var(--am-ember-line); background: var(--am-ember-soft); }
 
+  .am-bar .am-links { display: flex; flex-wrap: wrap; gap: 4px; }
+  .am-bar .am-links a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px; }
+  .am-bar .am-links a[aria-current] { background: var(--am-blue-soft); color: var(--am-blue-ink); }
+  .nav-count, summary .count {
+    padding: 1px 6px; border-radius: 999px; background: var(--am-ember-soft); color: #9b3a12; font-size: 12px; font-weight: 700;
+  }
+  .room-view { display: grid; gap: 16px; }
+  .room-view, .room-view [id] { scroll-margin-top: 122px; }
+  details.panel > summary { color: var(--am-ink); cursor: pointer; font-weight: 650; }
+  details.panel[open] > summary { margin-bottom: 12px; }
+  .connection-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  .connection-options > div { padding: 14px; background: var(--am-inset); border-radius: 10px; }
+  .connection-options h3 { margin: 0 0 6px; font-size: 15px; }
+
   /* project workspace card */
   .workspace {
-    display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1fr); align-items: center; gap: 18px 28px; margin-bottom: 18px;
+    display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1fr); align-items: center; gap: 18px 28px; margin: 0;
     padding: 16px 20px; border: 1px solid var(--am-line); border-radius: 14px; box-shadow: none;
     background: radial-gradient(60% 120% at 100% 0%, var(--am-blue-soft-2), transparent 70%), #fff;
   }
   .workspace h2 { margin: 0 0 6px; color: var(--am-ink); font: 600 18px/1.3 var(--am-font); letter-spacing: -.03em; }
   .workspace p { margin: 0; max-width: 48ch; font-size: 13px; line-height: 1.5; }
   .workspace-actions { justify-content: flex-end; }
-
-  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; }
-  .metric {
-    position: relative; margin: 0; padding: 14px 18px; min-width: 0; background: #fff; border: 1px solid var(--am-line);
-    border-radius: 14px; box-shadow: none;
-  }
-  .metric::before { content: ""; position: absolute; right: 16px; top: 17px; width: 7px; height: 7px; border-radius: 50%; background: var(--am-blue); }
-  .metric:nth-child(2)::before { background: var(--am-ember); }
-  .metric:nth-child(3)::before { background: var(--am-codex); }
-  .metric:nth-child(4)::before { background: var(--am-claude); }
-  .metric dt { color: var(--am-quiet); font: 500 13px/18px var(--am-font); }
-  .metric dd { margin: 4px 0 0; color: var(--am-ink); font: 600 28px/1.1 var(--am-font); letter-spacing: -.04em; }
 
   .grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
   .column { display: grid; min-width: 0; gap: 16px; }
@@ -86,6 +85,7 @@
   h2 .count { margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: var(--am-blue-soft); color: var(--am-blue-ink); font-size: 12px; font-weight: 600; vertical-align: 2px; }
   #conflicts, #requests { border-color: var(--am-ember-line); background: linear-gradient(180deg, #fffaf7, #fff 60%); }
   #conflicts h2 { color: #9b3a12; }
+  .meta.warn { color: var(--am-amber-ink); }
   .meta { margin-top: 2px; color: var(--am-quiet); font-size: 13px; font-weight: 400; line-height: 1.5; }
   .hint { margin: 8px 0 0; color: var(--am-quiet); font-size: 13px; }
   .empty { padding: 14px 4px; color: var(--am-muted); font-size: 14px; }
@@ -116,24 +116,7 @@
   .who-line .am-avatar { width: 22px; height: 22px; font-size: 10px; }
   .who-line code { background: #fff; border: 1px solid var(--am-line); border-radius: 8px; padding: 1px 8px; }
 
-  /* setup checklist */
-  .checklist { margin-bottom: 16px; padding: 16px 20px; background: #fff; border: 1px solid var(--am-blue-line); border-radius: 14px; box-shadow: none; }
-  .checklist-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-  .checklist-head h2 { margin: 0; }
-  .checklist-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
-  .checklist-heading .meta { margin: 0; }
-  .checklist:not(.expanded) #checklist-steps li:not(.next) { display: none; }
-  .progress { height: 4px; margin: 10px 0 12px; background: var(--am-blue-soft); border-radius: 999px; overflow: hidden; }
-  .progress span { display: block; height: 100%; width: 0; background: var(--am-grad-blue); border-radius: inherit; transition: width .4s var(--am-ease); }
-  #checklist-steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-  #checklist-steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; background: var(--am-inset); border-radius: 10px; }
-  #checklist-steps li.next { background: var(--am-blue-soft); }
-  #checklist-steps strong { color: var(--am-ink); font-weight: 600; font-size: 14px; }
-  #checklist-steps .hint { margin: 2px 0 0; }
-  .tick { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: #fff; border: 1px solid var(--am-line-hi); color: var(--am-quiet); font-weight: 700; }
-  li.done .tick { background: var(--am-green-soft); border-color: #c5ead4; color: var(--am-green-ink); }
-  li.done strong { color: var(--am-quiet); }
-  li.next .tick { background: var(--am-grad-blue); border: 0; color: #fff; }
+
 
   /* team chat */
   #messages { display: grid; gap: 8px; max-height: 340px; overflow-y: auto; margin: 12px 0; padding-right: 2px; }
@@ -229,15 +212,7 @@
   .retired-row { margin-top: 10px; font-size: 14px; }
   .retired-row s { color: var(--am-muted); }
 
-  /* footer status row */
-  footer { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--am-line); color: var(--am-quiet); font-size: 13px; }
-  footer .warn { padding: 3px 12px; border-radius: 999px; background: var(--am-amber-soft); color: var(--am-amber-ink); font-weight: 600; }
-  footer #checker:not(.warn), footer #key-status { padding: 3px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--am-line); }
-  footer button { min-height: 34px; padding: 6px 14px 9px; font-size: 13px; }
-  footer #set-key { margin-left: auto; }
-  footer #reset { color: var(--am-quiet); background: #fff; border-color: var(--am-line-hi); box-shadow: none; }
-  footer #reset:hover { color: var(--am-ember); border-color: var(--am-ember-line); background: var(--am-ember-soft); }
-  footer #set-key[hidden] + #reset { margin-left: auto; }
+
 
   /* dialogs */
   dialog { width: min(520px, calc(100% - 32px)); padding: 30px; color: var(--am-ink); background: #fff; border: 1px solid var(--am-line); border-radius: 28px; box-shadow: var(--am-shadow-window); }
@@ -276,26 +251,21 @@
   @media (max-width: 960px) {
     .grid, .workspace { grid-template-columns: minmax(0, 1fr); }
     .workspace-actions { justify-content: flex-start; }
-    .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 640px) {
     .ask-row, .chat-form { grid-template-columns: minmax(0, 1fr); }
-    #checklist-steps li { grid-template-columns: 34px minmax(0, 1fr); }
-    #checklist-steps li > button { grid-column: 2; justify-self: start; }
-    .checklist { padding: 14px; }
     .page, .am-bar { width: calc(100% - 28px); }
     .page { padding-top: 18px; }
     .am-bar { height: auto; min-height: 52px; flex-wrap: wrap; padding: 10px 12px; gap: 10px; }
-    .am-bar .am-links { display: flex; order: 3; width: 100%; overflow-x: auto; gap: 18px; padding-bottom: 4px; }
-    .am-bar .am-links a { flex: none; padding: 6px 0; }
-    .am-bar-end { margin-left: auto; }
+    .am-bar .am-links { width: 100%; }
+    .am-bar .am-links a { min-height: 40px; padding: 6px 10px; }
+    .connection-options { grid-template-columns: minmax(0, 1fr); }
     .header-actions { gap: 8px; }
     .control { min-height: 40px; }
     .panel, .workspace { padding: 16px; }
     .sides { grid-template-columns: minmax(0, 1fr); }
     .decision { grid-template-columns: minmax(0, 1fr); gap: 8px; }
     .decision .retire { justify-self: start; }
-    .metric { padding: 14px; } .metric dd { font-size: 26px; }
     .column { display: contents; }
     dialog { padding: 22px; }
   }
@@ -305,67 +275,33 @@
 <nav class="am-bar" aria-label="Room navigation">
   <a class="am-logo" href="/"><span class="am-mark" aria-hidden="true">CD</span>CoopDev</a>
   <div class="am-links">
-    <a href="#overview" aria-current="location">overview</a>
-    <a href="#live-panel">live</a>
-    <a href="#claim-panel">claims</a>
-    <a href="#chat-panel">chat</a>
-    <a href="#ask-panel">requests</a>
-    <a href="#git-panel">github</a>
-    <a href="#contract">decisions</a>
-    <a href="#file-panel">edits</a>
+    <a href="#overview" aria-current="location">Home <span class="nav-count" id="home-count" hidden></span></a>
+    <a href="#work">Work</a>
+    <a href="#team">Team</a>
+    <a href="#setup">Setup</a>
   </div>
-  <div class="am-bar-end"><button type="button" class="control" data-guide="setup">Setup guide</button></div>
 </nav>
-<main class="page" id="overview">
+<main class="page">
   <header>
     <div><p class="eyebrow">Your room</p><h1 id="room"></h1></div>
     <div class="header-actions">
       <span class="live" id="live"><span class="dot"></span><span id="live-text">Connecting</span></span>
       <button type="button" class="control primary" id="copy-invite">Copy invite</button>
-      <button type="button" class="control" id="copy-room">Copy room link</button>
       <span id="room-copy-status" class="copy-feedback" role="status"></span>
     </div>
   </header>
 
-  <section class="checklist" id="checklist" aria-labelledby="checklist-title" hidden>
-    <div class="checklist-head">
-      <div class="checklist-heading"><h2 id="checklist-title">Team setup</h2><p class="meta" id="checklist-progress"></p></div>
-      <button type="button" class="action small" id="checklist-hide" aria-expanded="false" aria-controls="checklist-steps">Show all steps</button>
-    </div>
-    <div class="progress" aria-hidden="true"><span id="checklist-bar"></span></div>
-    <ol id="checklist-steps"></ol>
-  </section>
-
-  <section class="workspace" aria-labelledby="workspace-title">
-    <div>
-      <h2 id="workspace-title">Project workspace</h2>
-      <p id="workspace-summary">Connect your project to share decisions, file activity, and code with your team.</p>
-    </div>
-    <div class="workspace-actions">
-      <button type="button" class="control primary" data-guide="setup" id="setup-guide">Connect your project</button>
-      <button type="button" class="control" data-guide="publish" id="publish-guide" hidden>Share changes</button>
-      <button type="button" class="control" data-guide="menu">Terminal shortcuts</button>
-      <button type="button" class="control" id="remote-link">Connect by link</button>
-      <button type="button" class="control" data-guide="sync" id="sync-guide" hidden>Sync updates</button>
-    </div>
-  </section>
-
-  <dl class="metrics">
-    <div class="metric"><dt>Active teammates</dt><dd id="active-total">—</dd></div>
-    <div class="metric"><dt>Open conflicts</dt><dd id="conflicts-total">—</dd></div>
-    <div class="metric"><dt>Open requests</dt><dd id="requests-total">—</dd></div>
-    <div class="metric"><dt>Files with overlap</dt><dd id="overlap-total">—</dd></div>
-  </dl>
-
-  <section class="panel" id="live-panel">
-    <h2><span class="live-dot" aria-hidden="true"></span>Live edits <span class="count" id="live-count"></span></h2>
-    <p class="meta">Every file edit by a teammate's agent, as it happens. <a id="code-link" class="control" style="margin-left:8px">Open code view</a></p>
-    <div id="live-overlaps"></div>
-    <ul id="live-feed" aria-live="polite"></ul>
-  </section>
-
-  <div class="grid">
-   <div class="column">
+  <section id="overview" class="room-view" data-view aria-labelledby="home-title">
+    <section class="workspace">
+      <div>
+        <h2 id="home-title">Welcome to your room</h2>
+        <p id="home-summary">Checking whether anyone has connected to this room…</p>
+      </div>
+      <div class="workspace-actions">
+        <a class="control primary" id="home-action" href="#setup">Open setup</a>
+        <a class="control" id="home-agent-requests" href="#ask-panel" hidden>Review agent requests</a>
+      </div>
+    </section>
     <section id="conflicts" class="panel" hidden>
       <h2>Decision conflicts <span class="count" id="conflict-count"></span></h2>
       <div id="conflict-list"></div>
@@ -374,76 +310,131 @@
       <h2>Decision requests <span class="count" id="request-count"></span></h2>
       <div id="request-list"></div>
     </section>
-    <section id="git-panel" class="panel">
-      <h2>GitHub</h2>
-      <p id="git-repository" class="meta"></p>
-      <div class="repo-actions" id="repo-actions"></div>
-      <ul id="git-activity"></ul>
-    </section>
-    <section class="panel" id="contract">
-      <h2>Team decisions <span class="count" id="decisions-total"></span></h2>
-      <ul id="decisions"></ul>
-      <details class="retired" id="retired" hidden>
-        <summary id="retired-summary"></summary>
-        <ul id="retired-list"></ul>
-      </details>
-    </section>
-   </div>
-   <div class="column">
-    <section class="panel" id="claim-panel">
-      <h2>Claimed work</h2>
-      <p class="meta">The first reservation wins. Supported agent edits pause when a teammate owns the file.</p>
-      <ul id="claims"></ul>
-    </section>
-    <section class="panel" id="chat-panel">
-      <h2>Team chat</h2>
-      <p class="meta">Every teammate's agent shows a new message to its user once, before their next prompt. Start with @name to message one person.</p>
-      <ul id="messages" aria-live="polite"></ul>
-      <form id="chat-form" class="chat-form">
-        <input id="chat-name" required maxlength="50" placeholder="Your name" autocomplete="name" aria-label="Your name">
-        <input id="chat-text" required maxlength="500" placeholder="Message the team" autocomplete="off" aria-label="Message">
-        <button class="control primary" id="chat-send" type="submit">Send</button>
-      </form>
-      <p id="chat-error" class="form-error" role="alert" hidden></p>
-    </section>
-    <section class="panel" id="ask-panel">
-      <h2>Ask a teammate's agent</h2>
-      <p class="meta">Send a prompt to a teammate's agent. Nothing runs until they approve, here or in their own chat. Their agent answers back.</p>
-      <ul id="asks" aria-live="polite"></ul>
-      <p id="ask-hint" class="hint" hidden>Set a team key (bottom of the page) to approve requests here. A teammate can also approve in their own chat with their agent.</p>
-      <form id="ask-form" class="ask-form">
-        <div class="ask-row">
-          <input id="ask-name" required maxlength="50" placeholder="Your name" autocomplete="name" aria-label="Your name">
-          <select id="ask-to" required aria-label="Teammate"><option value="">Teammate…</option></select>
-          <select id="ask-mode" aria-label="What their agent may do"><option value="read">Read only</option><option value="edit">Can edit files</option></select>
-        </div>
-        <textarea id="ask-prompt" required maxlength="800" rows="3" placeholder="What should their agent do? Example: can you look at why the login test is flaky on your branch? No changes, just tell me what you find." aria-label="Request"></textarea>
-        <button class="control primary" id="ask-send" type="submit">Send for approval</button>
-      </form>
-      <p id="ask-error" class="form-error" role="alert" hidden></p>
-    </section>
-    <section class="panel" id="file-panel">
-      <h2>Recent file edits</h2>
-      <p class="meta" id="file-window"></p>
-      <ul id="file-edits"></ul>
-    </section>
-    <section class="panel">
-      <h2>Teammates</h2>
-      <div class="people" id="people"></div>
-    </section>
-    <section class="panel">
-      <h2>Decision activity</h2>
-      <ul id="activity"></ul>
-    </section>
-   </div>
-  </div>
+  </section>
 
-  <footer>
-    <span id="checker"></span>
-    <span id="key-status"></span>
-    <button id="set-key" type="button" hidden>Set team key</button>
-    <button id="reset" type="button">Reset room</button>
-  </footer>
+  <section id="work" class="room-view" data-view aria-label="Work" hidden>
+    <section class="panel" id="live-panel">
+    <h2><span class="live-dot" aria-hidden="true"></span>Live edits <span class="count" id="live-count"></span></h2>
+    <p class="meta">Every file edit by a teammate's agent, as it happens. <a id="code-link" class="control" style="margin-left:8px">Open code view</a></p>
+    <div id="live-overlaps"></div>
+    <ul id="live-feed" aria-live="polite"></ul>
+  </section>
+    <div class="grid">
+      <div class="column">
+        <section class="panel" id="claim-panel">
+          <h2>Claimed work</h2>
+          <p class="meta">The first reservation wins. Supported agent edits pause when a teammate owns the file.</p>
+          <ul id="claims"></ul>
+        </section>
+      </div>
+      <div class="column">
+        <details id="git-panel" class="panel">
+          <summary>GitHub and pull requests</summary>
+          <p id="git-repository" class="meta"></p>
+          <div class="repo-actions">
+            <div class="repo-actions" id="repo-actions"></div>
+            <button class="control" type="button" data-guide="setup" id="git-setup-link">Set up GitHub</button>
+            <button type="button" class="control" data-guide="publish" id="publish-guide" hidden>Share changes</button>
+            <button type="button" class="control" data-guide="sync" id="sync-guide" hidden>Sync updates</button>
+          </div>
+          <ul id="git-activity"></ul>
+        </details>
+        <details class="panel" id="file-panel">
+          <summary>Recent file edits</summary>
+          <p class="meta" id="file-window"></p>
+          <ul id="file-edits"></ul>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="team" class="room-view" data-view aria-label="Team" hidden>
+    <div class="grid">
+      <div class="column">
+        <section class="panel" id="contract">
+          <h2>Team decisions <span class="count" id="decisions-total"></span></h2>
+          <ul id="decisions"></ul>
+          <a id="request-history-link" class="control" href="#requests" hidden>Decision requests</a>
+          <details class="retired" id="retired" hidden>
+            <summary id="retired-summary"></summary>
+            <ul id="retired-list"></ul>
+          </details>
+        </section>
+        <details class="panel" id="decision-activity"><summary>Decision history</summary><ul id="activity"></ul></details>
+      </div>
+      <div class="column">
+        <section class="panel" id="teammates">
+          <h2>Teammates</h2>
+          <div class="people" id="people"></div>
+        </section>
+        <section class="panel" id="chat-panel">
+          <h2>Team chat</h2>
+          <p class="meta">Every teammate's agent shows a new message to its user once, before their next prompt. Start with @name to message one person.</p>
+          <ul id="messages" aria-live="polite"></ul>
+          <form id="chat-form" class="chat-form">
+            <input id="chat-name" required maxlength="50" placeholder="Your name" autocomplete="name" aria-label="Your name">
+            <input id="chat-text" required maxlength="500" placeholder="Message the team" autocomplete="off" aria-label="Message">
+            <button class="control primary" id="chat-send" type="submit">Send</button>
+          </form>
+          <p id="chat-error" class="form-error" role="alert" hidden></p>
+        </section>
+        <details class="panel" id="ask-panel">
+          <summary>Agent requests <span id="ask-count" class="count" hidden></span></summary>
+          <p class="meta">Send a prompt to a teammate's agent. Nothing runs until they approve, here or in their own chat. Their agent answers back.</p>
+          <ul id="asks" aria-live="polite"></ul>
+          <p id="ask-hint" class="hint" hidden>Set a team key in Setup to approve requests here. A teammate can also approve in their own chat with their agent.</p>
+          <form id="ask-form" class="ask-form">
+            <div class="ask-row">
+              <input id="ask-name" required maxlength="50" placeholder="Your name" autocomplete="name" aria-label="Your name">
+              <select id="ask-to" required aria-label="Teammate"><option value="">Teammate…</option></select>
+              <select id="ask-mode" aria-label="What their agent may do"><option value="read">Read only</option><option value="edit">Can edit files</option></select>
+            </div>
+            <textarea id="ask-prompt" required maxlength="800" rows="3" placeholder="What should their agent do? Example: can you look at why the login test is flaky on your branch? No changes, just tell me what you find." aria-label="Request"></textarea>
+            <button class="control primary" id="ask-send" type="submit">Send for approval</button>
+          </form>
+          <p id="ask-error" class="form-error" role="alert" hidden></p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="setup" class="room-view" data-view aria-labelledby="workspace-title" hidden>
+    <section class="panel">
+      <h2 id="workspace-title">Connect an agent</h2>
+      <p class="meta">Choose how you want to connect to this room.</p>
+      <div class="connection-options">
+        <div>
+          <h3>Install in your project</h3>
+          <p class="meta">For Claude Code in Terminal. Adds automatic edit warnings and can connect GitHub during setup.</p>
+          <button type="button" class="control primary" data-guide="setup">Show setup command</button>
+        </div>
+        <div>
+          <h3>Connect by link</h3>
+          <p class="meta">For an AI app that supports remote MCP. Gives it access to room decisions, claims, and requests. Requires a team key.</p>
+          <button type="button" class="control" id="remote-link" disabled>Create personal link</button>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Room access</h2>
+      <p class="meta">Share the room with teammates. A team key is used to approve requests and open the code view.</p>
+      <div class="repo-actions">
+        <button type="button" class="control" id="copy-room">Copy room link</button>
+        <span id="link-copy-status" class="copy-feedback" role="status"></span>
+        <button type="button" class="control" id="set-key" hidden>Set team key</button>
+        <span class="meta" id="key-status"></span>
+      </div>
+    </section>
+    <details class="panel" id="room-settings">
+      <summary>More settings and help</summary>
+      <p id="checker" class="meta"></p>
+      <div class="repo-actions">
+        <button type="button" class="control" data-guide="menu">Terminal shortcuts</button>
+        <a class="control" href="/#setup">Open another room</a>
+        <button id="reset" class="control retire" type="button">Reset room</button>
+      </div>
+    </details>
+  </section>
 </main>
 
 <dialog id="terminal-dialog" aria-labelledby="terminal-title">
@@ -523,7 +514,7 @@
   $("copy-room").addEventListener("click", () => {
     const url = new URL("/app", location.origin);
     url.searchParams.set("room", room);
-    copyText(url.href, $("room-copy-status"), "Copy the room link from your address bar.");
+    copyText(url.href, $("link-copy-status"), "Copy the room link from your address bar.");
   });
 
   // Quote a value for the macOS/Linux shell, including embedded quotes.
@@ -548,14 +539,28 @@
       .then(() => { if ($("room-copy-status").textContent === "Copied.") $("room-copy-status").textContent = "Invite copied. Paste it to your teammate."; });
   }
 
+  function showDecisionRequests() {
+    $("requests").hidden = location.hash !== "#requests" && !Number($("requests").dataset.openCount);
+  }
+
   function selectNavigation() {
-    for (const link of document.querySelectorAll("nav a")) {
-      if (link.hash === (location.hash || "#overview")) link.setAttribute("aria-current", "location");
+    showDecisionRequests();
+    const hash = location.hash.slice(1);
+    const target = $(hash === "live" ? "live-panel" : hash) || $("overview");
+    const view = target.closest("[data-view]") || $("overview");
+    for (const section of document.querySelectorAll("[data-view]")) section.hidden = section !== view;
+    for (const link of document.querySelectorAll("nav .am-links a")) {
+      if (link.hash === "#" + view.id) link.setAttribute("aria-current", "location");
       else link.removeAttribute("aria-current");
     }
+    if (target !== view && view.contains(target)) {
+      const details = target.closest("details");
+      if (details) details.open = true;
+    }
+    if (target === view) window.scrollTo(0, 0);
+    else if (view.contains(target)) target.scrollIntoView();
   }
   window.addEventListener("hashchange", selectNavigation);
-  selectNavigation();
 
   function openGuide(kind) {
     const guides = {
@@ -600,7 +605,7 @@
       guides.setup.steps.unshift(["Get your team’s project", "If you don’t have it on your computer yet, clone the repository from GitHub.",
         null, ["Open project on GitHub", `https://github.com/${roomRepository.repository}`]]);
     } else {
-      guides.setup.steps.push(["Before connecting GitHub", "Set a team key at the bottom of this dashboard. Guided setup will ask for that key when linking your existing repository. You can skip GitHub and connect it later."]);
+      guides.setup.steps.push(["Before connecting GitHub", "Guided setup can link your existing repository. Set a team key in Setup first if you want to use GitHub, or skip GitHub and connect it later."]);
     }
     guides.setup.steps.push(["Allow the agent connection", "When Claude opens, sign in if needed, trust your project, and allow the coopdev tool. These choices stay in your hands."]);
     const guide = typeof kind === "object" ? kind : guides[kind];
@@ -702,25 +707,31 @@
   });
 
   // A personal remote MCP link: the agent tools with no install (no hooks, no Git).
-  $("remote-link").addEventListener("click", () => askHuman({
-    title: "Make a remote link",
-    text: "Your name is who the link acts as. The link works like a password: anyone who has it can act as you in this room. Making a new link replaces your old one.",
-    button: "Make link",
-    run: async ({author, key}) => {
-      const link = await send("/connectors", {room, author}, key);
-      setTimeout(() => openGuide({
-        title: "Your remote link",
-        intro: `Add this link to your AI app as a remote MCP server. It acts as ${link.name}. Keep it private.`,
-        steps: [
-          ["Your link", "Copy it now. It is shown only once.", link.url],
-          ["Claude app or claude.ai", "Settings → Connectors → Add custom connector. Paste the link as the server URL.", null],
-          ["Claude Code", "Run this in Terminal.", `claude mcp add --transport http coopdev ${shellQuote(link.url)}`],
-          ["Codex", "Add these lines to ~/.codex/config.toml.", `[mcp_servers.coopdev]\nurl = ${JSON.stringify(link.url)}`],
-          ["What works over a link", "Decisions, claims, chat, requests and team status. Edits are not blocked and Git is not available: for those, install CoopDev in the project.", null],
-        ],
-      }), 0);
-    },
-  }));
+  $("remote-link").addEventListener("click", () => {
+    if (!approvalEnabled) {
+      $("set-key").click();
+      return;
+    }
+    askHuman({
+      title: "Make a remote link",
+      text: "Your name is who the link acts as. The link works like a password: anyone who has it can act as you in this room. Making a new link replaces your old one.",
+      button: "Make link",
+      run: async ({author, key}) => {
+        const link = await send("/connectors", {room, author}, key);
+        setTimeout(() => openGuide({
+          title: "Your remote link",
+          intro: `Add this link to your AI app as a remote MCP server. It acts as ${link.name}. Keep it private.`,
+          steps: [
+            ["Your link", "Copy it now. It is shown only once.", link.url],
+            ["Claude app or claude.ai", "Settings → Connectors → Add custom connector. Paste the link as the server URL.", null],
+            ["Claude Code", "Run this in Terminal.", `claude mcp add --transport http coopdev ${shellQuote(link.url)}`],
+            ["Codex", "Add these lines to ~/.codex/config.toml.", `[mcp_servers.coopdev]\nurl = ${JSON.stringify(link.url)}`],
+            ["What works over a link", "Decisions, claims, chat, requests and team status. Edits are not blocked and Git is not available: for those, install CoopDev in the project.", null],
+          ],
+        }), 0);
+      },
+    });
+  });
 
   function settleConflict(c, action) {
     const keep = action === "keep";
@@ -820,13 +831,12 @@
       sides.append(wanted, decided);
       card.append(top, el("p", "why", c.explanation), sides);
       if (!state.approval_enabled) {
-        card.append(el("p", "hint", "To settle this here, set a team key at the bottom of the page."));
+        card.append(setupLink("Set a team key to settle this"));
       }
       conflictList.append(card);
     }
     $("conflicts").hidden = openConflicts.length === 0;
     $("conflict-count").textContent = openConflicts.length ? `${openConflicts.length} open` : "";
-    $("conflicts-total").textContent = openConflicts.length;
 
     // Decisions, newest first
     const decisions = $("decisions");
@@ -899,11 +909,19 @@
     seen = nowSeen;
   }
 
+  function setupLink(text) {
+    const link = el("a", "control", text);
+    link.href = "#setup";
+    return link;
+  }
+
   function renderRequests(state) {
     const requests = state.decision_requests || [];
+    $("request-history-link").hidden = !requests.length;
     const answers = new Map([...state.decisions, ...(state.retired_decisions || [])].map((d) => [d.id, d]));
-    $("requests").hidden = !requests.length;
     const openCount = requests.filter((r) => r.decision_id === null).length;
+    $("requests").dataset.openCount = openCount;
+    showDecisionRequests();
     $("request-count").textContent = `${openCount} open`;
     const list = $("request-list");
     list.replaceChildren();
@@ -921,7 +939,7 @@
         button.addEventListener("click", () => showAnswer(request));
         card.append(button);
       } else {
-        card.append(el("p", "hint", "To answer here, set a team key at the bottom of the page."));
+        card.append(setupLink("Set a team key to answer"));
       }
       list.append(card);
     }
@@ -995,17 +1013,13 @@
     actions.replaceChildren();
     roomRepository = git?.repository || null;
     $("publish-guide").hidden = $("sync-guide").hidden = !roomRepository;
-    $("setup-guide").textContent = roomRepository ? "Setup guide" : "Connect your project";
-    $("setup-guide").classList.toggle("primary", !roomRepository);
-    $("publish-guide").classList.toggle("primary", !!roomRepository);
+    $("git-setup-link").hidden = Boolean(roomRepository);
     if (!roomRepository) {
-      $("workspace-summary").textContent = "Connect your project to share decisions, file activity, and code with your team.";
       $("git-repository").textContent = "This room has no GitHub repository yet.";
       return;
     }
     const {repository, base_branch} = roomRepository;
     const url = `https://github.com/${repository}`;
-    $("workspace-summary").textContent = `Share work for review and keep your local copy of ${base_branch} up to date.`;
     const link = el("a", null, repository);
     link.href = url;
     $("git-repository").replaceChildren(link, document.createTextNode(` · Shared branch: ${base_branch}`));
@@ -1186,56 +1200,44 @@
     }
   });
 
-  // A setup list that ticks itself off from what the room already shows.
-  let checklistExpanded = memory.read("localStorage", "tc-checklist-expanded:" + room) === "1";
-  function updateChecklistExpansion() {
-    $("checklist").classList.toggle("expanded", checklistExpanded);
-    $("checklist-hide").textContent = checklistExpanded ? "Show next step" : "Show all steps";
-    $("checklist-hide").setAttribute("aria-expanded", String(checklistExpanded));
-  }
-  updateChecklistExpansion();
-  function renderChecklist(state) {
+  function renderHome(state) {
     const people = state.people || [];
-    const steps = [
-      [people.length > 0, "Connect your project", "Run one command in your project folder.", ["Show me how", () => openGuide("setup")]],
-      [Boolean(state.room_key || state.approval_enabled), "Set a team key", "A password only people know, needed to settle conflicts and approve requests.", ["Set team key", () => $("set-key").click()]],
-      [people.length > 1, "Invite a teammate", "Copy a ready-made message with the one command, and send it.", ["Copy invite", copyInvite]],
-      [Boolean(state.git?.repository), "Connect GitHub (optional)", "Lets agents share work as pull requests and bring in merged code.", ["Show me how", () => openGuide("setup")]],
-      [(state.decisions || []).length > 0, "Make your first team decision", "Ask Claude to build something. It records choices like the framework, so every agent follows them.", null],
-    ];
-    const done = steps.filter(([ok]) => ok).length;
-    const card = $("checklist");
-    card.hidden = done === steps.length;
-    if (card.hidden) return;
-    const signature = JSON.stringify(steps.map(([ok]) => ok));
-    if (card.dataset.signature === signature) return;
-    card.dataset.signature = signature;
-    $("checklist-progress").textContent = `${done} of ${steps.length} done`;
-    $("checklist-bar").style.width = `${(100 * done) / steps.length}%`;
-    const list = $("checklist-steps");
-    list.replaceChildren();
-    let next = true;
-    steps.forEach(([ok, label, hint, action], index) => {
-      const item = el("li", ok ? "done" : next ? "next" : "");
-      if (!ok) next = false;
-      item.append(el("span", "tick", ok ? "✓" : String(index + 1)));
-      const text = el("div");
-      text.append(el("strong", null, label), el("p", "hint", ok ? "Done." : hint));
-      item.append(text);
-      if (!ok && action) {
-        const button = el("button", item.className === "next" ? "control primary" : "control", action[0]);
-        button.type = "button";
-        button.addEventListener("click", action[1]);
-        item.append(button);
-      }
-      list.append(item);
-    });
+    const conflicts = (state.conflicts || []).filter((conflict) => !conflict.resolution).length;
+    const decisions = (state.decision_requests || []).filter((request) => request.decision_id === null).length;
+    const approvals = (state.asks || []).filter((request) => request.status === "pending").length;
+    const waiting = conflicts + decisions + approvals;
+    const count = $("home-count");
+    count.hidden = waiting === 0;
+    count.textContent = waiting;
+    $("ask-count").hidden = approvals === 0;
+    $("ask-count").textContent = approvals;
+    $("home-agent-requests").hidden = !(approvals && (conflicts || decisions));
+
+    const action = $("home-action");
+    const active = people.filter((person) => person.seconds_ago < ACTIVE_SECONDS).length;
+    if (waiting) {
+      $("home-title").textContent = "Needs attention";
+      $("home-summary").textContent = [
+        conflicts && `${conflicts} decision conflict${conflicts === 1 ? "" : "s"}`,
+        decisions && `${decisions} open decision request${decisions === 1 ? "" : "s"}`,
+        approvals && `${approvals} agent request${approvals === 1 ? "" : "s"} waiting for approval`,
+      ].filter(Boolean).join(" · ");
+      action.href = conflicts ? "#conflicts" : decisions ? "#requests" : "#ask-panel";
+      action.textContent = conflicts ? "Review conflicts" : decisions ? "Review decisions" : "Review agent requests";
+    } else if (!people.length) {
+      $("home-title").textContent = "Connect your first agent";
+      $("home-summary").textContent = "Install CoopDev in a project or create a personal link for your AI app.";
+      action.href = "#setup";
+      action.textContent = "Choose how to connect";
+    } else {
+      $("home-title").textContent = "You’re caught up";
+      $("home-summary").textContent = active
+        ? `${active} teammate${active === 1 ? " is" : "s are"} active now. See live edits and claimed files in Work.`
+        : "No teammates are active right now. Visit Work to see recent edits and claims.";
+      action.href = "#work";
+      action.textContent = "See team activity";
+    }
   }
-  $("checklist-hide").addEventListener("click", () => {
-    checklistExpanded = !checklistExpanded;
-    memory.write("localStorage", "tc-checklist-expanded:" + room, checklistExpanded ? "1" : "0");
-    updateChecklistExpansion();
-  });
   $("copy-invite").addEventListener("click", copyInvite);
 
   let knownPeople = [];
@@ -1274,7 +1276,6 @@
     }
     $("file-window").textContent = files ? `Last ${files.window_minutes} minutes` : "";
     const groups = [...editsByPath];
-    $("overlap-total").textContent = groups.filter(([, edits]) => edits.length > 1).length;
     groups.sort((a, b) => Number(b[1].length > 1) - Number(a[1].length > 1));
     for (const [path, edits] of groups) {
       const row = el("li", "file-row");
@@ -1400,6 +1401,8 @@
     }
     setLive(true);
     approvalEnabled = state.approval_enabled;
+    $("remote-link").disabled = false;
+    $("remote-link").textContent = approvalEnabled ? "Create personal link" : "Set team key to continue";
 
     // Redraw the lists only when something was added or removed, so the
     // highlight on a new item is not interrupted by the next refresh.
@@ -1423,7 +1426,6 @@
       $("git-panel").dataset.signature = gitSignature;
     }
     knownPeople = state.people || [];
-    renderChecklist(state);
     const messagesSignature = JSON.stringify(state.messages ?? []);
     if ($("messages").dataset.signature !== messagesSignature) {
       renderMessages(state.messages);
@@ -1436,15 +1438,11 @@
       $("asks").dataset.signature = asksSignature;
     }
     renderPeople(state.people || []);
-    $("active-total").textContent = (state.people || []).filter((person) => person.seconds_ago < ACTIVE_SECONDS).length;
-    // Open requests = unanswered team questions + agent requests still waiting for a yes or running.
-    $("requests-total").textContent =
-      (state.decision_requests || []).filter((r) => r.decision_id === null).length +
-      (state.asks || []).filter((a) => a.status === "pending" || a.status === "approved").length;
+    renderHome(state);
     updateTimes(state.now);
 
     const checker = $("checker");
-    checker.className = state.checker === "on" ? "" : "warn";
+    checker.classList.toggle("warn", state.checker !== "on");
     checker.textContent = state.checker === "on"
       ? "Conflict check: on"
       : "Conflict check: OFF (no API key on the server). Decisions are saved unchecked.";
@@ -1472,6 +1470,7 @@
     tick();
   });
 
+  selectNavigation();
   $("code-link").href = "/ide?" + new URLSearchParams({room});
   tick();
   liveTick();

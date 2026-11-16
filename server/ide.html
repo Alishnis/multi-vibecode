@@ -177,7 +177,7 @@
     <input id="gate-key" type="password" maxlength="200" autocomplete="off" placeholder="Team key" aria-label="Team key" required>
     <p class="error" id="gate-error" role="alert" hidden></p>
     <button class="btn on" id="gate-submit">Open the code view</button>
-    <a class="btn" id="gate-back" style="display:grid;place-items:center">Back to the dashboard</a>
+    <a class="btn" id="gate-back" style="display:grid;place-items:center">Open room setup</a>
   </form>
 </div>
 
@@ -206,8 +206,8 @@
   $("room").textContent = room;
   document.title = `${room} · Code · CoopDev`;
   const dashboard = "/app?" + new URLSearchParams({room});
-  $("back").href = dashboard;
-  $("gate-back").href = dashboard;
+  $("back").href = dashboard + "#work";
+  $("gate-back").href = dashboard + "#setup";
 
   // ---- state
   const files = new Map();          // "author\npath" -> {author, path, bytes, note, seq, updated_at}
@@ -263,7 +263,7 @@
     const noKey = error.status === 503;
     $("gate-title").textContent = noKey ? "This room has no team key yet" : "Team key";
     $("gate-text").textContent = noKey
-      ? "The code view keeps and shows code only in a room with a team key. Set one on the dashboard (bottom of the page), then come back."
+      ? "The code view keeps and shows code only in a room with a team key. Set one under Room access in Setup, then come back."
       : "Type the team key to read your team's code. The code is shown only to people who know it.";
     $("gate-key").hidden = $("gate-submit").hidden = noKey;
     $("gate-error").hidden = !key || noKey;

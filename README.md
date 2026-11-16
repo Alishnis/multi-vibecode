@@ -33,7 +33,7 @@ Claude also claims files before editing and warns you before an edit that would 
 
 `./coopdev help` lists every word. `./coopdev` is a two-line script that runs `python3 coord/team.py`; on Windows, or if your project already has its own file called `coopdev` (the installer never overwrites it), run `python3 coord/team.py` with the same words instead.
 
-**On the dashboard**, a **Get your team set up** list ticks itself off as you go: connect your project, set a team key, invite a teammate, connect GitHub, make the first decision. Each open step has a button that does it or shows how.
+**On the dashboard**, **Home** shows what needs attention. **Work** has live edits, code, claims, and GitHub. **Team** has decisions, chat, and requests to teammate agents. **Setup** lets you install in your project or connect by link and manage room access.
 
 ## Guided setup — one command
 
