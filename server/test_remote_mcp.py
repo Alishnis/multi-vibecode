@@ -122,5 +122,16 @@ class RemoteMcpTest(unittest.TestCase):
         self.assertEqual(self.client.post("/mcp/not-a-real-token", json={}).status_code, 404)
 
 
+class HideTokensTest(unittest.TestCase):
+    def test_access_log_masks_the_token(self):
+        import logging
+        from server.remote_mcp import HideTokens
+        record = logging.LogRecord("uvicorn.access", logging.INFO, "", 0, '%s - "%s %s HTTP/%s" %d',
+                                   ("127.0.0.1:1", "POST", "/mcp/SECRET123", "1.1", 200), None)
+        HideTokens().filter(record)
+        self.assertNotIn("SECRET123", record.getMessage())
+        self.assertIn("/mcp/<link>", record.getMessage())
+
+
 if __name__ == "__main__":
     unittest.main()

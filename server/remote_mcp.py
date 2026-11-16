@@ -30,6 +30,7 @@ import hashlib
 import importlib.util
 import json
 import logging
+import re
 import secrets
 import sqlite3
 import time
@@ -162,6 +163,18 @@ def public_base(request: Request) -> str:
     return f"{proto}://{host}"
 
 
+class HideTokens(logging.Filter):
+    """The token is in the link, and uvicorn logs every request's path. Mask it there."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(re.sub(r"/mcp/[^/\s?]+", "/mcp/<link>", arg) if isinstance(arg, str) else arg
+                                for arg in record.args)
+        if isinstance(record.msg, str) and "/mcp/" in record.msg:
+            record.msg = re.sub(r"/mcp/[^/\s?]+", "/mcp/<link>", record.msg)
+        return True
+
+
 class RateLimit:
     def __init__(self, per_minute: int):
         self.per_minute = per_minute
@@ -237,6 +250,7 @@ def mount(app: FastAPI, *, connect: Callable[[], sqlite3.Connection], now: Calla
     global APP
     APP = app
     limit = RateLimit(CALLS_PER_MINUTE)
+    logging.getLogger("uvicorn.access").addFilter(HideTokens())
 
     with connect() as conn:
         conn.execute(
