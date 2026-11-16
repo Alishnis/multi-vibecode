@@ -38,6 +38,7 @@ FILES_TO_COPY = [
     "coord/git_sync.py",
     "coord/team.py",
     "coord/summary.py",
+    "coord/live_sync.py",
     "coord/me.example.json",
     "tc",
     "coopdev",

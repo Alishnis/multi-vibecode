@@ -18,6 +18,12 @@ Live feed on the dashboard, where teammates watch each other's edits as they
 happen. The server keeps the newest 200 diffs per room. Set "live": false in
 coord/me.json to keep your diffs off the feed.
 
+For the read-only code view, the report also carries the whole file after the
+edit (longer files follow in the background). The server keeps it only in a room with a
+team key and shows it only to people who type that key. When the server asks
+for a fresh copy of the project, coord/live_sync.py is started in the
+background. "live": false switches all of this off too.
+
 There are four kinds of overlap, strongest first:
 
   ACTIVE COLLISION           a teammate changed the file in the last 5 minutes and is
@@ -69,6 +75,8 @@ ACTIVE_MINUTES = 5            # a change this fresh, by someone still working, i
 HASH_LIMIT_BYTES = 2_000_000  # larger files are not fingerprinted
 LEVELS = ["recent", "parallel", "stale", "active"]      # weakest first
 CHANGE_LIMIT = 4000           # characters of changed lines sent for the AI summary
+CODE_LIMIT = 60_000           # characters of the edited file sent with the report; a longer
+                              # file goes in the background instead, so the report stays fast
 LIVE_LIMIT = 6000             # characters of diff sent for the Live feed
 SECRET_NAMES = re.compile(r"(^\.env|secret|credential|password|\.pem$|\.key$|id_rsa|\.p12$)", re.IGNORECASE)
 TITLES = {
@@ -316,6 +324,34 @@ def live_diff(path: str, event: dict) -> str | None:
     except (AttributeError, KeyError, TypeError, IndexError, ValueError):
         return None
     return cut_diff(lines)
+
+
+def file_text(path: str) -> str | None:
+    """The whole file after the edit, for the code view. None for secrets, binary or long files."""
+    if SECRET_NAMES.search(Path(path).name):
+        return None
+    try:
+        file = ROOT / path
+        if file.stat().st_size > CODE_LIMIT:
+            return None
+        text = file.read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    return text if "\0" not in text and len(text) <= CODE_LIMIT else None
+
+
+def start_project_sync() -> None:
+    """Send the rest of the project in the background; the hook does not wait for it."""
+    script = ROOT / "coord/live_sync.py"
+    if not script.is_file():
+        return
+    try:
+        subprocess.Popen(
+            [sys.executable, "-B", str(script)], cwd=ROOT, stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+        )
+    except OSError:
+        pass
 
 
 # ------------------------------------------- what this session has read, locally
@@ -638,12 +674,17 @@ def run(event: dict) -> dict | None:
             payload["change"] = changed_lines(path, event.get("tool_name"), event.get("tool_input") or {})
             if me.get("live") is not False:
                 payload["diff"] = live_diff(path, event)
+                payload["content"] = file_text(path)
     request = urllib.request.Request(
         me["server"].rstrip("/") + endpoint, data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"}, method="POST",
     )
     with urlopen(request, timeout=2) as response:
         result = json.load(response)
+    if name == "PostToolUse" and isinstance(result, dict) and "diff" in payload:
+        too_long = payload.get("content") is None and not SECRET_NAMES.search(Path(path).name)
+        if result.get("sync") is True or (too_long and "sync" in result):
+            start_project_sync()
     if name == "PreToolUse":
         assessed, claims = assess(event, path, result), checked_claims(result)
         if assessed or claims:

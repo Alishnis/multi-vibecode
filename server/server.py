@@ -44,6 +44,7 @@ CLIENT_FILES = (
     "coord/git_sync.py",
     "coord/team.py",
     "coord/summary.py",
+    "coord/live_sync.py",
     "coord/me.example.json",
     "tc",
     "coopdev",
@@ -54,6 +55,10 @@ FILE_ACTIVITY_MINUTES = 30
 LIVE_KEEP = 200               # diffs kept per room for the Live feed; older ones are deleted
 LIVE_DIFF_LIMIT = 6000        # characters of one diff; longer text is cut
 LIVE_PAGE = 50                # most diffs one request returns
+CODE_FILE_LIMIT = 200_000     # characters of one file in the code view; larger files are listed without text
+CODE_FILES_PER_PERSON = 1500  # files kept per teammate in the code view
+CODE_BATCH = 60               # files one upload may carry
+CODE_SYNC_MINUTES = 10        # after this long, a teammate's computer is asked to send its files again
 SECRET_FILE_NAMES = re.compile(r"(^\.env|secret|credential|password|\.pem$|\.key$|id_rsa|\.p12$)", re.IGNORECASE)
 MESSAGE_KEEP = 200            # chat messages kept per room; older ones are deleted
 MESSAGES_PER_PROMPT = 5       # an agent is told about at most this many new messages at once
@@ -225,6 +230,28 @@ def create_tables() -> None:
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS live_edits_room ON live_edits(room, id)")
+        # The code view: each teammate's copy of the project files, for reading
+        # only. Stored only in rooms with a team key, and read only with it.
+        # seq counts changes in a room, so the page can ask "what is new".
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS live_files (
+                room TEXT NOT NULL, author TEXT NOT NULL, path TEXT NOT NULL, content TEXT, note TEXT,
+                bytes INTEGER NOT NULL DEFAULT 0, seq INTEGER NOT NULL, updated_at TEXT NOT NULL,
+                PRIMARY KEY (room, author, path)
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS live_files_seq ON live_files(room, seq)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS live_syncs (
+                room TEXT NOT NULL, author TEXT NOT NULL, branch TEXT, synced_at TEXT NOT NULL,
+                PRIMARY KEY (room, author)
+            )
+            """
+        )
+        conn.execute("CREATE TABLE IF NOT EXISTS room_counters (room TEXT PRIMARY KEY, seq INTEGER NOT NULL)")
         # A claim says what a teammate is about to work on, before any edit.
         # It is a notice for the others, never a lock.
         conn.execute(
@@ -594,10 +621,34 @@ class FileActivity(RoomAuthor):
         lambda value: value[:LIVE_DIFF_LIMIT] if isinstance(value, str) and value.strip() else None
     )] = None
 
+    # The whole file after the edit, for the code view. Kept only in a room
+    # with a team key. A file that is too long is listed without its text.
+    content: Annotated[str | None, BeforeValidator(
+        lambda value: value if isinstance(value, str) and len(value) <= CODE_FILE_LIMIT else None
+    )] = None
+
     @field_validator("path")
     @classmethod
     def relative_path(cls, value: str) -> str:
         return project_path(value)
+
+
+class CodeFile(BaseModel):
+    path: str = Field(min_length=1, max_length=500)
+    content: str | None = Field(default=None, max_length=CODE_FILE_LIMIT)
+    note: Annotated[str | None, BeforeValidator(short_text(80))] = None   # why there is no text
+
+    @field_validator("path")
+    @classmethod
+    def relative_path(cls, value: str) -> str:
+        return project_path(value)
+
+
+class CodeSync(RoomAuthor):
+    branch: str | None = Field(default=None, min_length=1, max_length=250)
+    files: list[CodeFile] = Field(default_factory=list, max_length=CODE_BATCH)
+    # Every file the teammate has now. Sent with the last upload: files not in it are removed.
+    paths: list[str] | None = Field(default=None, max_length=CODE_FILES_PER_PERSON)
 
 
 CHANGE_TEXT_LIMIT = 4000
@@ -1378,7 +1429,7 @@ def reset_room(room: RoomParam, x_contract_token: str | None = Header(None)) -> 
         require_approval(room, x_contract_token)
     with connect() as conn:
         for table in ("decisions", "conflicts", "people", "decision_requests",
-                      "git_activity", "file_edits", "live_edits", "room_repositories", "share_checks", "claims", "messages", "asks"):
+                      "git_activity", "file_edits", "live_edits", "live_files", "live_syncs", "room_repositories", "share_checks", "claims", "messages", "asks"):
             conn.execute(f"DELETE FROM {table} WHERE room = ?", (room,))
     return {"room": room, "reset": True}
 
@@ -1526,10 +1577,134 @@ def record_file_edit(activity: FileActivity, background: BackgroundTasks) -> dic
                 "(SELECT id FROM live_edits WHERE room = ? ORDER BY id DESC LIMIT ?)",
                 (activity.room, activity.room, LIVE_KEEP),
             )
+        sync = False
+        if approval_enabled(conn, activity.room):
+            if activity.content is not None:
+                save_code_file(conn, activity.room, activity.author, activity.path, activity.content, None)
+            last = conn.execute("SELECT synced_at FROM live_syncs WHERE room = ? AND author = ?",
+                                (activity.room, activity.author)).fetchone()
+            cutoff = (datetime.now(timezone.utc) - timedelta(minutes=CODE_SYNC_MINUTES)).isoformat(timespec="seconds")
+            sync = last is None or last["synced_at"] < cutoff
     if activity.change and conflicts.small_configured():
         background.add_task(improve_summary, activity.room, activity.path, activity.author,
                             edited_at, activity.summary, activity.change)
-    return {"ok": True}
+    # "sync" asks the teammate's computer to send its project files for the code view.
+    return {"ok": True, "sync": sync}
+
+
+# ---------------------------------------------------------------- the code view
+
+def save_code_file(conn: sqlite3.Connection, room: str, author: str, path: str,
+                   content: str | None, note: str | None) -> bool:
+    """Keep one file of a teammate's copy. Returns False when nothing changed."""
+    if SECRET_FILE_NAMES.search(PurePosixPath(path).name):
+        content, note = None, "secret file, not shared"
+    elif content is None and not note:
+        note = "not shared"
+    old = conn.execute("SELECT content, note FROM live_files WHERE room = ? AND author = ? AND path = ?",
+                       (room, author, path)).fetchone()
+    if old and old["content"] == content and old["note"] == (None if content is not None else note):
+        return False
+    if not old and conn.execute("SELECT COUNT(*) FROM live_files WHERE room = ? AND author = ?",
+                                (room, author)).fetchone()[0] >= CODE_FILES_PER_PERSON:
+        return False
+    conn.execute("INSERT INTO room_counters (room, seq) VALUES (?, 1) "
+                 "ON CONFLICT (room) DO UPDATE SET seq = seq + 1", (room,))
+    seq = conn.execute("SELECT seq FROM room_counters WHERE room = ?", (room,)).fetchone()[0]
+    conn.execute(
+        "INSERT INTO live_files (room, author, path, content, note, bytes, seq, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (room, author, path) DO UPDATE SET "
+        "content = excluded.content, note = excluded.note, bytes = excluded.bytes, "
+        "seq = excluded.seq, updated_at = excluded.updated_at",
+        (room, author, path, content, None if content is not None else note,
+         len(content.encode()) if content is not None else 0, seq, now()),
+    )
+    return True
+
+
+@app.post("/code/files")
+def upload_code(sync: CodeSync) -> dict:
+    """A teammate's computer sends its project files, a batch at a time."""
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if not approval_enabled(conn, sync.room):
+            # Without a team key nobody could be kept from reading the code, so none is kept.
+            return {"stored": False, "reason": "This room has no team key. Set one on the dashboard to turn on the code view."}
+        changed = sum(save_code_file(conn, sync.room, sync.author, file.path, file.content, file.note)
+                      for file in sync.files)
+        removed = 0
+        if sync.paths is not None:
+            keep = {project_path(path) for path in sync.paths}
+            gone = [row["path"] for row in conn.execute(
+                "SELECT path FROM live_files WHERE room = ? AND author = ?", (sync.room, sync.author),
+            ) if row["path"] not in keep]
+            conn.executemany("DELETE FROM live_files WHERE room = ? AND author = ? AND path = ?",
+                             [(sync.room, sync.author, path) for path in gone])
+            removed = len(gone)
+            conn.execute(
+                "INSERT INTO live_syncs (room, author, branch, synced_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (room, author) DO UPDATE SET branch = excluded.branch, synced_at = excluded.synced_at",
+                (sync.room, sync.author, sync.branch, now()),
+            )
+    return {"stored": True, "changed": changed, "removed": removed}
+
+
+CODE_FILE_COLUMNS = "author, path, note, bytes, seq, updated_at"
+
+
+def code_counts(conn: sqlite3.Connection, room: str) -> dict:
+    return {row["author"]: row["files"] for row in conn.execute(
+        "SELECT author, COUNT(*) AS files FROM live_files WHERE room = ? GROUP BY author", (room,))}
+
+
+def room_seq(conn: sqlite3.Connection, room: str) -> int:
+    row = conn.execute("SELECT seq FROM room_counters WHERE room = ?", (room,)).fetchone()
+    return row["seq"] if row else 0
+
+
+@app.get("/code/tree")
+def code_tree(room: RoomParam, x_contract_token: str | None = Header(None)) -> dict:
+    """Every teammate's file list for the code view. Needs the team key."""
+    require_approval(room, x_contract_token)
+    with connect() as conn:
+        files = [dict(row) for row in conn.execute(
+            f"SELECT {CODE_FILE_COLUMNS} FROM live_files WHERE room = ? ORDER BY author, path", (room,))]
+        syncs = {row["author"]: dict(row) for row in conn.execute(
+            "SELECT author, branch, synced_at FROM live_syncs WHERE room = ?", (room,))}
+        seq = room_seq(conn, room)
+    people = {}
+    for file in files:
+        person = people.setdefault(file["author"], {
+            "author": file["author"], "branch": syncs.get(file["author"], {}).get("branch"),
+            "synced_at": syncs.get(file["author"], {}).get("synced_at"), "files": []})
+        person["files"].append(file)
+    return {"people": list(people.values()), "seq": seq, "now": now()}
+
+
+@app.get("/code/changes")
+def code_changes(room: RoomParam, after: Annotated[int, Query(ge=0)] = 0,
+                 x_contract_token: str | None = Header(None)) -> dict:
+    """Files changed since `after`. "counts" lets the page notice removed files."""
+    require_approval(room, x_contract_token)
+    with connect() as conn:
+        files = [dict(row) for row in conn.execute(
+            f"SELECT {CODE_FILE_COLUMNS} FROM live_files WHERE room = ? AND seq > ? ORDER BY seq LIMIT 500",
+            (room, after))]
+        return {"files": files, "counts": code_counts(conn, room), "seq": room_seq(conn, room), "now": now()}
+
+
+@app.get("/code/file")
+def code_file(room: RoomParam, author: Annotated[str, BeforeValidator(clean_line), Query(min_length=1, max_length=50)],
+              path: Annotated[str, Query(min_length=1, max_length=500)],
+              x_contract_token: str | None = Header(None)) -> dict:
+    require_approval(room, x_contract_token)
+    with connect() as conn:
+        row = conn.execute(
+            f"SELECT {CODE_FILE_COLUMNS}, content FROM live_files WHERE room = ? AND author = ? AND path = ?",
+            (room, author, path)).fetchone()
+    if not row:
+        raise HTTPException(404, "No such file in the code view.")
+    return {**dict(row), "now": now()}
 
 
 @app.get("/live")
@@ -1824,6 +1999,11 @@ def homepage(room: str | None = None) -> HTMLResponse:
 @app.get("/app", include_in_schema=False)
 def dashboard() -> HTMLResponse:
     return page_html(DASHBOARD_PATH)
+
+
+@app.get("/ide", include_in_schema=False)
+def code_view() -> HTMLResponse:
+    return page_html(PROJECT_ROOT / "server/ide.html")
 
 
 @app.get("/design.css", include_in_schema=False)

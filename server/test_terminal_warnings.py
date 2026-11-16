@@ -265,6 +265,9 @@ class TerminalWarningsTest(unittest.TestCase):
         self.assertEqual(sent["change"], "-pass\n+def list_todos():\n+    return SECRET_TOKEN")
         # The same edit as a diff goes to the Live feed, and only there.
         self.assertEqual(sent["diff"], "@@\n-pass\n+def list_todos():\n+    return SECRET_TOKEN")
+        # The whole file goes along for the code view. This room has no team key, so it is not kept.
+        self.assertEqual(sent["content"], "def list_todos():\n    return SECRET_TOKEN\n")
+        self.assertFalse(server.DB_PATH.read_bytes().count(b"def list_todos():\n    return SECRET_TOKEN\n"))
         client = self.enterContext(TestClient(server.app))
         state = client.get("/state?room=terminal-test")
         self.assertNotIn("SECRET_TOKEN", state.text)
@@ -293,6 +296,7 @@ class TerminalWarningsTest(unittest.TestCase):
             "file_path": "src/todos.py", "old_string": "A=1", "new_string": "A=SECRET_TOKEN"})
         sent = self.requests[-1][1]
         self.assertNotIn("diff", sent)
+        self.assertNotIn("content", sent)
         self.assertEqual(sent["change"], "-A=1\n+A=SECRET_TOKEN")
         self.assertNotIn(b"SECRET_TOKEN", (self.root / "test.db").read_bytes())
 

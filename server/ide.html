@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code · CoopDev</title>
+<style>
+  /* The read-only code view. It looks like an editor, but nothing here can change a file. */
+  :root {
+    --bg: #0e1116; --panel: #141920; --panel-2: #1a2029; --line: #252d38; --hover: #1f2731; --select: #243247;
+    --text: #d5dde8; --dim: #8b97a7; --faint: #5d6978;
+    --blue: #5aa2ff; --green: #3fb950; --red: #f85149; --amber: #e3a341; --purple: #c792ea;
+    --add-bg: rgb(63 185 80 / .16); --del-bg: rgb(248 81 73 / .16);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body { display: grid; grid-template-rows: 40px minmax(0, 1fr) 24px; background: var(--bg); color: var(--text); font: 13px/1.5 var(--sans); overflow: hidden; color-scheme: dark; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #2b3542; border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+
+  /* title bar */
+  .title { display: flex; align-items: center; gap: 12px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; }
+  .mark { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: linear-gradient(180deg, #3a3f48, #15181d); color: #fff; font: 700 10px/1 var(--sans); }
+  .title strong { font-weight: 600; }
+  .title .room { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); font-size: 11px; white-space: nowrap; }
+  .badge.lock { color: var(--amber); border-color: rgb(227 163 65 / .4); }
+  .title .space { flex: 1; }
+  .btn { height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); white-space: nowrap; }
+  .btn:hover { background: var(--hover); }
+  .btn.on { background: var(--blue); border-color: var(--blue); color: #06101f; font-weight: 600; }
+
+  /* three columns */
+  .main { display: grid; grid-template-columns: 250px minmax(0, 1fr) 320px; min-height: 0; }
+  .side, .feed { display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+  .side { border-right: 1px solid var(--line); }
+  .feed { border-left: 1px solid var(--line); }
+  .heading { padding: 10px 12px 6px; color: var(--dim); font: 600 11px/1.4 var(--sans); letter-spacing: .08em; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; }
+
+  /* teammates */
+  .people { padding: 0 6px 6px; display: grid; gap: 2px; border-bottom: 1px solid var(--line); }
+  .person { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px; border: 0; border-radius: 6px; background: none; text-align: left; }
+  .person:hover { background: var(--hover); }
+  .person[aria-pressed="true"] { background: var(--select); }
+  .avatar { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #08101c; font: 700 11px/1 var(--sans); }
+  .person .who { min-width: 0; flex: 1; }
+  .person .who b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .person .who small { display: block; color: var(--dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pulse { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+
+  /* file tree */
+  .tree { flex: 1; overflow: auto; padding: 0 0 12px; font-size: 13px; }
+  .row { display: flex; align-items: center; gap: 6px; width: 100%; height: 24px; padding: 0 10px 0 calc(10px + var(--depth, 0) * 14px); border: 0; background: none; text-align: left; white-space: nowrap; }
+  .row:hover { background: var(--hover); }
+  .row.open-file { background: var(--select); }
+  .row .name { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .row.folder .name { color: var(--text); }
+  .row .twist { flex: none; width: 10px; color: var(--faint); font-size: 10px; transition: transform .12s; }
+  .row.folder[aria-expanded="true"] .twist { transform: rotate(90deg); }
+  .row .kind { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--faint); }
+  .row.unshared .name { color: var(--faint); font-style: italic; }
+  .row .changed { flex: none; color: var(--amber); font: 700 11px/1 var(--mono); }
+  .row.fresh .name { color: var(--amber); }
+  .tree .empty, .feed .empty { padding: 14px 12px; color: var(--dim); }
+
+  /* editor */
+  .editor { display: grid; grid-template-rows: 34px 26px minmax(0, 1fr); min-width: 0; min-height: 0; }
+  .tabs { display: flex; overflow-x: auto; background: var(--panel); border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px 0 12px; border: 0; border-right: 1px solid var(--line); background: none; color: var(--dim); white-space: nowrap; }
+  .tab[aria-selected="true"] { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--blue); }
+  .tab .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .tab .close { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; color: var(--faint); }
+  .tab .close:hover { background: var(--hover); color: var(--text); }
+  .crumbs { display: flex; align-items: center; gap: 8px; padding: 0 14px; color: var(--dim); font-size: 12px; border-bottom: 1px solid var(--line); min-width: 0; white-space: nowrap; overflow: hidden; }
+  .crumbs .path { overflow: hidden; text-overflow: ellipsis; }
+  .crumbs .space { flex: 1; }
+  .crumbs .note { color: var(--amber); }
+  .code { overflow: auto; font: 12.5px/1.6 var(--mono); tab-size: 4; counter-reset: line; padding: 6px 0 40px; }
+  .l { display: flex; min-width: max-content; }
+  .l::before { counter-increment: line; content: counter(line); flex: none; width: 52px; padding-right: 14px; text-align: right; color: var(--faint); user-select: none; border-left: 3px solid transparent; }
+  .l > span { white-space: pre; padding-right: 24px; }
+  .l.new { background: var(--add-bg); }
+  .l.new::before { border-left-color: var(--green); color: var(--green); }
+  .l.flash { animation: flash 2.2s ease-out; }
+  @keyframes flash { from { background: rgb(63 185 80 / .45); } }
+  .k { color: var(--purple); } .s { color: #a8d98a; } .c { color: var(--faint); font-style: italic; } .n { color: #f0946c; } .f { color: #7cc0ff; }
+  .welcome { display: grid; place-content: center; gap: 6px; height: 100%; text-align: center; color: var(--dim); padding: 24px; font-family: var(--sans); }
+  .welcome h1 { margin: 0; color: var(--text); font: 600 18px/1.3 var(--sans); }
+  .welcome p { margin: 0; max-width: 46ch; }
+  .welcome code { font-family: var(--mono); color: var(--text); background: var(--panel-2); padding: 1px 6px; border-radius: 4px; }
+
+  /* live activity */
+  .events { flex: 1; overflow: auto; padding: 0 8px 12px; display: grid; gap: 8px; align-content: start; }
+  .event { display: block; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); text-align: left; min-width: 0; }
+  .event:hover { border-color: #37424f; }
+  .event.fresh { animation: arrive 2.4s ease-out; }
+  @keyframes arrive { from { border-color: var(--blue); background: #1c2c44; } }
+  .event .top { display: flex; align-items: center; gap: 6px; }
+  .event .top b { font-weight: 600; }
+  .event .top time { margin-left: auto; color: var(--faint); font-size: 11px; white-space: nowrap; }
+  .event .file { display: block; margin-top: 2px; font: 12px/1.4 var(--mono); color: var(--blue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .event .sum { display: block; margin-top: 3px; color: var(--dim); font-size: 12px; }
+  .event pre { margin: 6px 0 0; max-height: 132px; overflow: hidden; font: 11px/1.5 var(--mono); border-radius: 5px; background: var(--bg); }
+  .event pre span { display: block; padding: 0 6px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  .event pre .add { background: var(--add-bg); color: #8fe3a0; } .event pre .del { background: var(--del-bg); color: #ff9c96; } .event pre .hunk { color: var(--blue); }
+
+  /* status bar */
+  .status { display: flex; align-items: center; gap: 16px; padding: 0 12px; background: #1d4f91; color: #e8f1ff; font-size: 12px; white-space: nowrap; overflow: hidden; }
+  .status.off { background: #7a2b26; }
+  .status .space { flex: 1; }
+
+  /* team key */
+  .gate { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px; background: rgb(8 10 14 / .82); backdrop-filter: blur(3px); }
+  .gate form { width: min(400px, 100%); padding: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 12px; }
+  .gate h2 { margin: 0; font: 600 17px/1.3 var(--sans); }
+  .gate p { margin: 0; color: var(--dim); }
+  .gate input { height: 36px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+  .gate .error { color: #ff9c96; }
+  .gate .btn { height: 34px; }
+
+  @media (max-width: 1000px) { .main { grid-template-columns: 220px minmax(0, 1fr); } .feed { display: none; } }
+  @media (max-width: 640px) { .main { grid-template-columns: minmax(0, 1fr); grid-template-rows: 40% 60%; } .side { border-right: 0; border-bottom: 1px solid var(--line); } .title .badge:not(.lock) { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .pulse, .l.flash, .event.fresh { animation: none; } }
+</style>
+</head>
+<body>
+<header class="title">
+  <span class="mark" aria-hidden="true">CD</span><strong>CoopDev</strong>
+  <span class="room" id="room"></span>
+  <span class="badge lock">Read-only</span>
+  <span class="space"></span>
+  <button type="button" class="btn on" id="follow" aria-pressed="true" title="Open each file as soon as an agent edits it">Follow edits: on</button>
+  <a class="btn" id="back" style="display:grid;place-items:center">Dashboard</a>
+</header>
+
+<div class="main">
+  <aside class="side" aria-label="Files">
+    <div class="heading">Teammates</div>
+    <div class="people" id="people"></div>
+    <div class="heading"><span id="tree-title">Files</span><span id="tree-count"></span></div>
+    <div class="tree" id="tree"></div>
+  </aside>
+
+  <section class="editor" aria-label="File">
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="crumbs" id="crumbs"></div>
+    <div class="code" id="code"></div>
+  </section>
+
+  <aside class="feed" aria-label="Live activity">
+    <div class="heading">Live activity <span id="feed-count"></span></div>
+    <div class="events" id="events"></div>
+  </aside>
+</div>
+
+<footer class="status" id="status">
+  <span id="status-live">Connecting…</span>
+  <span id="status-branch"></span>
+  <span class="space"></span>
+  <span id="status-lines"></span>
+  <span id="status-lang"></span>
+  <span>Read-only</span>
+</footer>
+
+<div class="gate" id="gate" hidden>
+  <form id="gate-form">
+    <h2 id="gate-title">Team key</h2>
+    <p id="gate-text">Type the team key to read your team's code. The code is shown only to people who know it.</p>
+    <input id="gate-key" type="password" maxlength="200" autocomplete="off" placeholder="Team key" aria-label="Team key" required>
+    <p class="error" id="gate-error" role="alert" hidden></p>
+    <button class="btn on" id="gate-submit">Open the code view</button>
+    <a class="btn" id="gate-back" style="display:grid;place-items:center">Back to the dashboard</a>
+  </form>
+</div>
+
+<script>
+  const room = new URLSearchParams(location.search).get("room") || "demo";
+  const $ = (id) => document.getElementById(id);
+  const query = (values) => new URLSearchParams({room, ...values}).toString();
+  const FRESH_SECONDS = 90;      // a file edited this recently is marked in the tree
+  const MAX_EVENTS = 40;
+  const MAX_TABS = 8;
+
+  // textContent everywhere: file text and names can never run as HTML.
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  const store = {
+    read(kind, name) { try { return window[kind].getItem(name) || ""; } catch { return ""; } },
+    write(kind, name, value) { try { window[kind].setItem(name, value); } catch { /* private window */ } },
+  };
+  let key = store.read("sessionStorage", "tc-key:" + room);   // the same place the dashboard keeps it
+
+  $("room").textContent = room;
+  document.title = `${room} · Code · CoopDev`;
+  const dashboard = "/app?" + new URLSearchParams({room});
+  $("back").href = dashboard;
+  $("gate-back").href = dashboard;
+
+  // ---- state
+  const files = new Map();          // "author\npath" -> {author, path, bytes, note, seq, updated_at}
+  let seq = 0;                      // newest change already known
+  let author = null;                // whose copy the tree shows
+  const tabs = [];                  // [{author, path}]
+  let active = null;                // the open tab
+  let shown = null;                 // {author, path, seq, lines} of the text on screen
+  const closedFolders = new Set();
+  let follow = store.read("localStorage", "tc-follow") !== "off";
+  let serverNow = Date.now();
+  let liveAfter = 0;
+  let liveStarted = false;
+  const lastEdit = new Map();       // "author\npath" -> time of the newest edit seen in the feed
+  const lastDiff = new Map();       // "author\npath" -> that edit's diff
+  let busy = false;
+
+  const id = (who, path) => who + "\n" + path;
+  const COLOURS = ["#7cc0ff", "#f0a36c", "#b8a1ff", "#7fd6a0", "#f58fb0"];
+  function colour(name) {
+    let hash = 0;
+    for (const char of String(name)) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
+    return COLOURS[hash % COLOURS.length];
+  }
+  function avatar(name) {
+    const node = el("span", "avatar", (String(name).trim()[0] || "?").toUpperCase());
+    node.style.background = colour(name);
+    return node;
+  }
+  function ago(time) {
+    const seconds = Math.max(0, (serverNow - new Date(time).getTime()) / 1000);
+    if (seconds < 10) return "just now";
+    if (seconds < 60) return `${Math.floor(seconds)}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    return `${Math.floor(seconds / 3600)} h ago`;
+  }
+  const isFresh = (time) => time && (serverNow - new Date(time).getTime()) / 1000 < FRESH_SECONDS;
+
+  // ---- talking to the server
+  class NeedKey extends Error {}
+  async function get(path, values) {
+    const response = await fetch(`${path}?${query(values)}`, { cache: "no-store", headers: {"X-Contract-Token": key} });
+    if (response.status === 403 || response.status === 503) {
+      const detail = (await response.json().catch(() => ({}))).detail || "";
+      throw Object.assign(new NeedKey(detail), {status: response.status});
+    }
+    if (!response.ok) throw new Error(response.status);
+    return response.json();
+  }
+
+  function askKey(error) {
+    $("gate").hidden = false;
+    const noKey = error.status === 503;
+    $("gate-title").textContent = noKey ? "This room has no team key yet" : "Team key";
+    $("gate-text").textContent = noKey
+      ? "The code view keeps and shows code only in a room with a team key. Set one on the dashboard (bottom of the page), then come back."
+      : "Type the team key to read your team's code. The code is shown only to people who know it.";
+    $("gate-key").hidden = $("gate-submit").hidden = noKey;
+    $("gate-error").hidden = !key || noKey;
+    $("gate-error").textContent = "That key is not right.";
+    if (!noKey) $("gate-key").focus();
+  }
+  $("gate-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    key = $("gate-key").value;
+    store.write("sessionStorage", "tc-key:" + room, key);
+    $("gate-key").value = "";
+    $("gate").hidden = true;
+    seq = 0;
+    files.clear();
+    tick();
+  });
+
+  // ---- teammates
+  function people() {
+    const byName = new Map();
+    for (const file of files.values()) {
+      const person = byName.get(file.author) || {author: file.author, files: 0, newest: ""};
+      person.files += 1;
+      if (file.updated_at > person.newest) person.newest = file.updated_at;
+      byName.set(file.author, person);
+    }
+    return [...byName.values()].sort((a, b) => a.author.localeCompare(b.author));
+  }
+  const branches = new Map();       // author -> branch, from the feed and the tree
+
+  function renderPeople() {
+    const list = people();
+    if (!author && list.length) author = list[0].author;
+    $("people").replaceChildren(...list.map((person) => {
+      const button = el("button", "person");
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(person.author === author));
+      const who = el("span", "who");
+      who.append(el("b", null, person.author), el("small", null,
+        `${branches.get(person.author) || "no branch"} · ${person.files} files`));
+      button.append(avatar(person.author), who);
+      const edits = [...lastEdit].filter(([name]) => name.startsWith(person.author + "\n")).map(([, time]) => time);
+      if (edits.some(isFresh)) button.append(el("span", "pulse"));
+      button.addEventListener("click", () => { author = person.author; renderPeople(); renderTree(); });
+      return button;
+    }));
+    if (!list.length) $("people").replaceChildren(el("div", "empty", "Nobody has shared files yet."));
+  }
+
+  // ---- file tree
+  function renderTree() {
+    const mine = [...files.values()].filter((file) => file.author === author)
+      .sort((a, b) => a.path.localeCompare(b.path));
+    $("tree-title").textContent = author ? `${author}'s files` : "Files";
+    $("tree-count").textContent = mine.length || "";
+    const root = {folders: new Map(), files: []};
+    for (const file of mine) {
+      const parts = file.path.split("/");
+      let node = root;
+      for (const part of parts.slice(0, -1)) {
+        if (!node.folders.has(part)) node.folders.set(part, {folders: new Map(), files: []});
+        node = node.folders.get(part);
+      }
+      node.files.push(file);
+    }
+    const rows = [];
+    (function walk(node, prefix, depth) {
+      for (const [name, child] of [...node.folders].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const path = prefix + name;
+        const open = !closedFolders.has(path);
+        const row = el("button", "row folder");
+        row.type = "button";
+        row.style.setProperty("--depth", depth);
+        row.setAttribute("aria-expanded", String(open));
+        row.append(el("span", "twist", "▶"), el("span", "name", name));
+        row.addEventListener("click", () => {
+          closedFolders[open ? "add" : "delete"](path);
+          renderTree();
+        });
+        rows.push(row);
+        if (open) walk(child, path + "/", depth + 1);
+      }
+      for (const file of node.files) {
+        const row = el("button", "row file");
+        row.type = "button";
+        row.style.setProperty("--depth", depth);
+        row.title = file.note ? `${file.path} (${file.note})` : file.path;
+        const kind = el("span", "kind");
+        kind.style.background = extensionColour(file.path);
+        row.append(kind, el("span", "name", file.path.split("/").pop()));
+        if (file.note) row.classList.add("unshared");
+        if (isFresh(lastEdit.get(id(file.author, file.path)))) {
+          row.classList.add("fresh");
+          row.append(el("span", "changed", "M"));
+        }
+        if (active && active.author === file.author && active.path === file.path) row.classList.add("open-file");
+        row.addEventListener("click", () => openFile(file.author, file.path));
+        rows.push(row);
+      }
+    })(root, "", 0);
+    $("tree").replaceChildren(...rows);
+    if (!rows.length) {
+      $("tree").replaceChildren(el("div", "empty", author
+        ? "No files yet."
+        : "Files appear when a teammate's agent edits one, or when they run ./coopdev live."));
+    }
+  }
+
+  const EXTENSION_COLOURS = {py: "#5aa2ff", js: "#e8d44d", ts: "#4c9be8", tsx: "#4c9be8", jsx: "#e8d44d", html: "#f0946c",
+    css: "#b8a1ff", json: "#a8d98a", md: "#8b97a7", go: "#6ad7e5", rs: "#f0946c", java: "#f58fb0", sh: "#7fd6a0", yml: "#f58fb0", yaml: "#f58fb0"};
+  const extension = (path) => (path.includes(".") ? path.split(".").pop().toLowerCase() : "");
+  const extensionColour = (path) => EXTENSION_COLOURS[extension(path)] || "#5d6978";
+
+  // ---- colouring code. One pass over the text; good enough to read, not a real parser.
+  const KEYWORDS = new Set(("and as assert async await break case catch class const continue def default del do elif else enum except export " +
+    "extends false finally fn for from func function global if impl implements import in interface is lambda let match mod new nil none " +
+    "not null or package pass pub raise return self static struct super switch this throw true try type typeof undefined use var void " +
+    "while with yield False None True").split(" "));
+  const HASH_COMMENTS = new Set(["py", "sh", "rb", "yml", "yaml", "toml", "r", "pl", "dockerfile", "gitignore", "env", "txt", "cfg", "ini"]);
+  const NO_COLOUR = new Set(["md", "txt", "csv", "log", ""]);
+
+  function tokens(text, ext) {
+    if (NO_COLOUR.has(ext) || text.length > 120000) return [[null, text]];
+    const parts = [];
+    if (ext === "html" || ext === "xml" || ext === "svg") parts.push("(?<c><!--[\\s\\S]*?-->)");
+    else if (HASH_COMMENTS.has(ext)) parts.push("(?<c>#[^\\n]*)");
+    else if (ext === "css") parts.push("(?<c>/\\*[\\s\\S]*?\\*/)");
+    else if (ext !== "json") parts.push("(?<c>//[^\\n]*|/\\*[\\s\\S]*?\\*/)");
+    if (ext === "py") parts.push('(?<s>"""[\\s\\S]*?"""|\'\'\'[\\s\\S]*?\'\'\'|"(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\')');
+    else parts.push('(?<s>"(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\'|`(?:\\\\.|[^`\\\\])*`)');
+    parts.push("(?<n>\\b\\d[\\d_.]*\\b)", "(?<w>[A-Za-z_$][\\w$]*)");
+    const pattern = new RegExp(parts.join("|"), "g");
+    const out = [];
+    let last = 0;
+    for (const match of text.matchAll(pattern)) {
+      if (match.index > last) out.push([null, text.slice(last, match.index)]);
+      const groups = match.groups;
+      let kind = groups.c != null ? "c" : groups.s != null ? "s" : groups.n != null ? "n" : null;
+      if (groups.w != null) kind = KEYWORDS.has(groups.w) ? "k" : text[match.index + match[0].length] === "(" ? "f" : null;
+      out.push([kind, match[0]]);
+      last = match.index + match[0].length;
+    }
+    if (last < text.length) out.push([null, text.slice(last)]);
+    return out;
+  }
+
+  function codeLines(text, ext) {
+    const lines = [];
+    let line = el("div", "l");
+    let holder = el("span");
+    line.append(holder);
+    for (const [kind, value] of tokens(text, ext)) {
+      const pieces = value.split("\n");
+      pieces.forEach((piece, index) => {
+        if (index) {
+          lines.push(line);
+          line = el("div", "l");
+          holder = el("span");
+          line.append(holder);
+        }
+        if (piece) holder.append(kind ? el("span", kind, piece) : document.createTextNode(piece));
+      });
+    }
+    lines.push(line);
+    return lines;
+  }
+
+  // Which lines of the new text are new or changed, given the old lines. Equal start and end are skipped.
+  function changedRange(before, after) {
+    let start = 0;
+    while (start < before.length && start < after.length && before[start] === after[start]) start += 1;
+    let endBefore = before.length, endAfter = after.length;
+    while (endBefore > start && endAfter > start && before[endBefore - 1] === after[endAfter - 1]) { endBefore -= 1; endAfter -= 1; }
+    return [start, endAfter];
+  }
+
+  // Line numbers (from 0) that a diff added, read from its "@@ -1,3 +1,4 @@" headers.
+  function addedLines(diff) {
+    const added = [];
+    let line = null;
+    for (const text of (diff || "").split("\n")) {
+      const header = /^@@ -\d+(?:,\d+)? \+(\d+)/.exec(text);
+      if (header) line = Number(header[1]) - 1;
+      else if (text.startsWith("@@")) line = null;
+      else if (line === null || text.startsWith("-") || text.startsWith("\\")) continue;
+      else { if (text.startsWith("+")) added.push(line); line += 1; }
+    }
+    return added;
+  }
+
+  // ---- tabs and the open file
+  function renderTabs() {
+    $("tabs").replaceChildren(...tabs.map((tab) => {
+      const button = el("button", "tab");
+      button.type = "button";
+      button.setAttribute("role", "tab");
+      const selected = active && tab.author === active.author && tab.path === active.path;
+      button.setAttribute("aria-selected", String(Boolean(selected)));
+      button.title = `${tab.author} · ${tab.path}`;
+      const dot = el("span", "dot");
+      dot.style.background = colour(tab.author);
+      const close = el("span", "close", "×");
+      close.setAttribute("aria-label", "Close");
+      close.addEventListener("click", (event) => { event.stopPropagation(); closeTab(tab); });
+      button.append(dot, el("span", null, tab.path.split("/").pop()), close);
+      button.addEventListener("click", () => openFile(tab.author, tab.path));
+      return button;
+    }));
+  }
+
+  function closeTab(tab) {
+    const index = tabs.indexOf(tab);
+    tabs.splice(index, 1);
+    if (active === tab) {
+      active = null;
+      shown = null;
+      const next = tabs[Math.min(index, tabs.length - 1)];
+      if (next) return openFile(next.author, next.path);
+      showWelcome();
+    }
+    renderTabs();
+    renderTree();
+  }
+
+  function showWelcome() {
+    const box = el("div", "welcome");
+    box.append(el("h1", null, files.size ? "Pick a file on the left" : "Waiting for the first files"));
+    const text = el("p");
+    if (files.size) text.textContent = "This is your team's code, as it is on each teammate's computer right now. You can read every file. Nothing here can change one.";
+    else text.append("Files appear when a teammate's agent edits one. To send a whole project now, a teammate runs ", el("code", null, "./coopdev live"), " in the project folder.");
+    box.append(text);
+    $("code").replaceChildren(box);
+    $("crumbs").replaceChildren();
+    $("status-lines").textContent = $("status-lang").textContent = "";
+  }
+
+  async function openFile(who, path, {reveal = false} = {}) {
+    let tab = tabs.find((item) => item.author === who && item.path === path);
+    if (!tab) {
+      tab = {author: who, path};
+      tabs.push(tab);
+      if (tabs.length > MAX_TABS) tabs.splice(tabs.indexOf(tabs.find((item) => item !== active)), 1);
+    }
+    active = tab;
+    if (author !== who) { author = who; renderPeople(); }
+    renderTabs();
+    renderTree();
+    await showFile(reveal);
+  }
+
+  async function showFile(reveal = false) {
+    if (!active) return;
+    const wanted = active;
+    let file;
+    try {
+      file = await get("/code/file", {author: wanted.author, path: wanted.path});
+    } catch (error) {
+      if (error instanceof NeedKey) return askKey(error);
+      if (active === wanted) $("code").replaceChildren(el("div", "welcome", "This file is no longer in the code view."));
+      return;
+    }
+    if (active !== wanted) return;   // another file was opened while this one loaded
+    const crumbs = [avatar(file.author), el("span", null, `${file.author}'s copy`),
+      el("span", "path", file.path.split("/").join(" › ")), el("span", "space")];
+    const edited = lastEdit.get(id(file.author, file.path));
+    crumbs.push(el("span", null, edited ? `edited ${ago(edited)}` : `sent ${ago(file.updated_at)}`));
+    $("crumbs").replaceChildren(...crumbs);
+    $("status-lang").textContent = extension(file.path).toUpperCase() || "TEXT";
+    $("status-branch").textContent = branches.get(file.author) ? `⎇ ${branches.get(file.author)}` : "";
+    if (file.content == null) {
+      const box = el("div", "welcome");
+      box.append(el("h1", null, "This file is not shown"), el("p", null, `Reason: ${file.note || "not shared"}.`));
+      $("code").replaceChildren(box);
+      $("status-lines").textContent = "";
+      shown = null;
+      return;
+    }
+    const lines = file.content.split("\n");
+    const same = shown && shown.author === file.author && shown.path === file.path;
+    // Lines to mark: what changed since the text on screen, or, for a file just opened
+    // from the feed, the lines its newest edit added.
+    let marks = [];
+    if (same) {
+      const [from, to] = changedRange(shown.lines, lines);
+      for (let index = from; index < to; index += 1) marks.push(index);
+    } else if (reveal || isFresh(edited)) {
+      marks = addedLines(lastDiff.get(id(file.author, file.path)));
+    }
+    const scroll = same ? $("code").scrollTop : 0;
+    const nodes = codeLines(file.content, extension(file.path));
+    for (const index of marks) nodes[index]?.classList.add("new", "flash");
+    $("code").replaceChildren(...nodes);
+    $("code").scrollTop = scroll;
+    if (marks.length && nodes[marks[0]] && (reveal || follow)) nodes[marks[0]].scrollIntoView({block: "center"});
+    $("status-lines").textContent = `${lines.length} lines`;
+    shown = {author: file.author, path: file.path, seq: file.seq, lines};
+  }
+
+  // ---- live activity
+  function eventCard(edit, fresh) {
+    const card = el("button", fresh ? "event fresh" : "event");
+    card.type = "button";
+    card.dataset.id = edit.id;
+    const top = el("span", "top");
+    const time = el("time", null, ago(edit.edited_at));
+    time.dataset.time = edit.edited_at;
+    top.append(avatar(edit.author), el("b", null, `${edit.author}'s agent`), time);
+    card.append(top, el("span", "file", edit.path));
+    if (edit.summary) card.append(el("span", "sum", edit.summary));
+    const diff = el("pre");
+    for (const line of edit.diff.split("\n").slice(0, 7)) {
+      diff.append(el("span", line.startsWith("@@") ? "hunk" : line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : null, line || " "));
+    }
+    card.append(diff);
+    card.addEventListener("click", () => openFile(edit.author, edit.path, {reveal: true}));
+    return card;
+  }
+
+  async function liveTick() {
+    const response = await fetch(`/live?${query({after: liveAfter})}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(response.status);
+    const data = await response.json();
+    const box = $("events");
+    if (data.latest === null) { box.replaceChildren(); liveAfter = 0; }
+    let newest = null;
+    for (const edit of data.edits) {
+      box.querySelector(".empty")?.remove();
+      box.prepend(eventCard(edit, liveStarted));
+      liveAfter = Math.max(liveAfter, edit.id);
+      lastEdit.set(id(edit.author, edit.path), edit.edited_at);
+      lastDiff.set(id(edit.author, edit.path), edit.diff);
+      if (edit.branch) branches.set(edit.author, edit.branch);
+      newest = edit;
+    }
+    for (const card of [...box.querySelectorAll(".event")].slice(MAX_EVENTS)) card.remove();
+    if (!box.children.length) box.replaceChildren(el("div", "empty", "No edits yet. When an agent edits a file, it shows up here."));
+    $("feed-count").textContent = box.querySelectorAll(".event").length || "";
+    const first = !liveStarted;
+    liveStarted = true;
+    return first ? null : newest;
+  }
+
+  // ---- one refresh
+  async function tick() {
+    if (busy || !$("gate").hidden) return;
+    busy = true;
+    try {
+      const newest = await liveTick();
+      let changed;
+      if (seq === 0) {
+        const tree = await get("/code/tree");
+        files.clear();
+        for (const person of tree.people) {
+          if (person.branch) branches.set(person.author, person.branch);
+          for (const file of person.files) files.set(id(file.author, file.path), file);
+        }
+        seq = tree.seq;
+        serverNow = new Date(tree.now).getTime();
+        changed = true;
+      } else {
+        const data = await get("/code/changes", {after: seq});
+        serverNow = new Date(data.now).getTime();
+        for (const file of data.files) files.set(id(file.author, file.path), file);
+        changed = data.files.length > 0;
+        seq = data.seq;
+        // A count that does not match means a file was removed: read the whole list again.
+        const counts = {};
+        for (const file of files.values()) counts[file.author] = (counts[file.author] || 0) + 1;
+        if (JSON.stringify(Object.entries(counts).sort()) !== JSON.stringify(Object.entries(data.counts).sort())) seq = 0;
+        if (active && data.files.some((file) => file.author === active.author && file.path === active.path)) await showFile();
+      }
+      if (newest && follow && files.has(id(newest.author, newest.path))
+          && !(active && active.author === newest.author && active.path === newest.path)) {
+        await openFile(newest.author, newest.path, {reveal: true});
+      }
+      const signature = `${changed}|${author}|${[...lastEdit.values()].filter(isFresh).length}|${files.size}`;
+      if (changed || $("tree").dataset.signature !== signature) {
+        $("tree").dataset.signature = signature;
+        renderPeople();
+        renderTree();
+      }
+      if (!active && !$("code").children.length) showWelcome();
+      else if (!active && changed) showWelcome();
+      for (const time of document.querySelectorAll("time[data-time]")) time.textContent = ago(time.dataset.time);
+      $("status").classList.remove("off");
+      $("status-live").textContent = `● Live · ${files.size} files from ${people().length} teammate${people().length === 1 ? "" : "s"}`;
+    } catch (error) {
+      if (error instanceof NeedKey) askKey(error);
+      else {
+        $("status").classList.add("off");
+        $("status-live").textContent = "○ Not connected. Trying again…";
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
+  function showFollow() {
+    $("follow").textContent = `Follow edits: ${follow ? "on" : "off"}`;
+    $("follow").classList.toggle("on", follow);
+    $("follow").setAttribute("aria-pressed", String(follow));
+  }
+  $("follow").addEventListener("click", () => {
+    follow = !follow;
+    store.write("localStorage", "tc-follow", follow ? "on" : "off");
+    showFollow();
+  });
+  showFollow();
+
+  tick();
+  setInterval(tick, 1200);
+</script>
+</body>
+</html>

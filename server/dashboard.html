@@ -359,7 +359,7 @@
 
   <section class="panel" id="live-panel">
     <h2><span class="live-dot" aria-hidden="true"></span>Live edits <span class="count" id="live-count"></span></h2>
-    <p class="meta">Every file edit by a teammate's agent, as it happens.</p>
+    <p class="meta">Every file edit by a teammate's agent, as it happens. <a id="code-link" class="control" style="margin-left:8px">Open code view</a></p>
     <div id="live-overlaps"></div>
     <ul id="live-feed" aria-live="polite"></ul>
   </section>
@@ -1472,6 +1472,7 @@
     tick();
   });
 
+  $("code-link").href = "/ide?" + new URLSearchParams({room});
   tick();
   liveTick();
   setInterval(tick, 1000);

@@ -273,6 +273,21 @@ Nothing else changes: the files stay on each person's computer and still travel 
 - Edits made through a remote MCP link do not appear, because a link has no hooks.
 - Teammates who installed before this feature must run the installer again to get the new hook.
 
+### Code view (read-only)
+
+**Open code view** on the dashboard (or `/ide?room=YOUR_ROOM`) opens a page that looks like a code editor: teammates on the left, their file tree below, the open file in the middle with line numbers and colours, and live activity on the right. You can read every file of every teammate's copy. Nothing on the page can change a file.
+
+- **Follow edits** (on by default) opens each file the moment an agent edits it and marks the new lines in green.
+- Each teammate has their own copy, because each works in their own folder and branch. Pick a teammate to see theirs.
+- A file appears when an agent edits it. The rest of the project follows in the background a moment later. To send everything now, run `./coopdev live`.
+
+**Who can read the code.** Whole files are more sensitive than the rest of the dashboard, so the rules are stricter:
+
+- The server keeps files **only in a room with a team key**, and shows them **only to people who type that key**. In a room without a key nothing is kept.
+- Never sent: files that usually hold secrets (`.env`, key files), files over 200 KB, binary files, files Git ignores, and the CoopDev tool itself. They are listed by name only.
+- `"live": false` in `coord/me.json` switches this off for you. **Reset room** deletes every stored file.
+- On the free hosted server, files are lost when the server restarts. They come back with the next edit.
+
 The dashboard shows the summary next to each recent edit. When this session reads a file, the time is noted on your computer only (`coord/.state/`, kept out of Git).
 
 ### Four kinds of warning

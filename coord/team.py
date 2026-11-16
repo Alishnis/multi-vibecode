@@ -25,6 +25,7 @@ ACTIONS = {
     "claims": "Which files are claimed",
     "release": "Release my claims",
     "room": "Open the team dashboard",
+    "live": "Send my files to the team's read-only code view, and open it",
     "watch": "Keep my shared branch updated while this window is open",
     "claude": "Open Claude Code",
     "setup": "Run guided setup again",
@@ -204,6 +205,16 @@ def perform(action, me):
         return doctor(me)
     if action == "room":
         url = me["server"].rstrip("/") + "/app?" + urllib.parse.urlencode({"room": me["room"]})
+        webbrowser.open(url)
+        print(url)
+    elif action == "live":
+        import live_sync
+        try:
+            print(live_sync.sync(me))
+        except (OSError, ValueError) as error:
+            print(f"Could not update the code view. {error}")
+            return 1
+        url = me["server"].rstrip("/") + "/ide?" + urllib.parse.urlencode({"room": me["room"]})
         webbrowser.open(url)
         print(url)
     elif action == "claims":
