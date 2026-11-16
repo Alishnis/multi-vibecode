@@ -852,7 +852,6 @@
     $("requests").hidden = !requests.length;
     const openCount = requests.filter((r) => r.decision_id === null).length;
     $("request-count").textContent = `${openCount} open`;
-    $("requests-total").textContent = openCount;
     const list = $("request-list");
     list.replaceChildren();
     for (const request of [...requests].sort((a, b) => Number(a.decision_id !== null) - Number(b.decision_id !== null))) {
@@ -1295,6 +1294,10 @@
     }
     renderPeople(state.people || []);
     $("active-total").textContent = (state.people || []).filter((person) => person.seconds_ago < ACTIVE_SECONDS).length;
+    // Open requests = unanswered team questions + agent requests still waiting for a yes or running.
+    $("requests-total").textContent =
+      (state.decision_requests || []).filter((r) => r.decision_id === null).length +
+      (state.asks || []).filter((a) => a.status === "pending" || a.status === "approved").length;
     updateTimes(state.now);
 
     const checker = $("checker");

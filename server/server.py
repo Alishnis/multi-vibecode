@@ -422,7 +422,7 @@ def contract_as_text(decisions: list[dict], budget: int = CONTRACT_TEXT_BUDGET) 
     """
     if not decisions:
         return "The shared contract is empty. No decisions have been recorded yet."
-    lines = ["CoopDev (decisions already made by the team):"]
+    lines = ["Shared contract (decisions already made by the team):"]
     used = len(lines[0])
     for position, d in enumerate(decisions):
         line = f"- [{d['category']}] {d['text']} (by {d['author']})"
