@@ -13,6 +13,11 @@ the server's free small model can write a one-sentence summary. The server
 does not store them. Set "ai_summary": false in coord/me.json to never send
 them. Files that usually hold secrets (.env, keys) are never sent.
 
+The report also carries the edit as a diff (at most 6,000 characters) for the
+Live feed on the dashboard, where teammates watch each other's edits as they
+happen. The server keeps the newest 200 diffs per room. Set "live": false in
+coord/me.json to keep your diffs off the feed.
+
 There are four kinds of overlap, strongest first:
 
   ACTIVE COLLISION           a teammate changed the file in the last 5 minutes and is
@@ -35,6 +40,7 @@ they still there" follows AgentMash's published protocol (MIT licence). The
 code here is our own.
 """
 
+import difflib
 import hashlib
 import hmac
 import json
@@ -63,6 +69,7 @@ ACTIVE_MINUTES = 5            # a change this fresh, by someone still working, i
 HASH_LIMIT_BYTES = 2_000_000  # larger files are not fingerprinted
 LEVELS = ["recent", "parallel", "stale", "active"]      # weakest first
 CHANGE_LIMIT = 4000           # characters of changed lines sent for the AI summary
+LIVE_LIMIT = 6000             # characters of diff sent for the Live feed
 SECRET_NAMES = re.compile(r"(^\.env|secret|credential|password|\.pem$|\.key$|id_rsa|\.p12$)", re.IGNORECASE)
 TITLES = {
     "claimed": "CLAIMED BY A TEAMMATE",
@@ -254,6 +261,61 @@ def changed_lines(path: str, tool: str, tool_input: dict) -> str | None:
     except (AttributeError, TypeError):
         return None
     return "\n".join(lines)[:CHANGE_LIMIT] or None
+
+
+def cut_diff(lines: list[str]) -> str | None:
+    """Join diff lines, stopping at a whole line before LIVE_LIMIT characters."""
+    kept, size = [], 0
+    for line in lines:
+        size += len(line) + 1
+        if size > LIVE_LIMIT - 40:
+            kept.append("\\ diff cut here, the edit is longer")
+            break
+        kept.append(line)
+    return "\n".join(kept) or None
+
+
+def live_diff(path: str, event: dict) -> str | None:
+    """The edit as a short unified diff, for the Live feed on the dashboard.
+
+    Claude Code reports the real patch (with line numbers) after an edit. When
+    it does not, the diff is worked out from the old and new text of the edit.
+    """
+    if SECRET_NAMES.search(Path(path).name):
+        return None
+    tool, tool_input = event.get("tool_name"), event.get("tool_input")
+    tool_input = tool_input if isinstance(tool_input, dict) else {}
+    response = event.get("tool_response")
+    hunks = response.get("structuredPatch") if isinstance(response, dict) else None
+    lines = []
+    try:
+        for hunk in hunks if isinstance(hunks, list) else []:
+            lines.append("@@ -{oldStart},{oldLines} +{newStart},{newLines} @@".format(**hunk))
+            lines += [line for line in hunk["lines"] if isinstance(line, str)]
+        if lines:
+            return cut_diff(lines)
+        if tool == "Write":
+            parts = [("", tool_input.get("content"))]
+        elif tool == "NotebookEdit":
+            parts = [("", tool_input.get("new_source"))]
+        else:
+            edits = tool_input.get("edits")
+            edits = edits if isinstance(edits, list) else [tool_input]
+            parts = [(edit.get("old_string"), edit.get("new_string")) for edit in edits if isinstance(edit, dict)]
+        for old, new in parts:
+            if not isinstance(old, str) or not isinstance(new, str):
+                continue
+            if not old:
+                lines.append("@@ new text @@")
+                lines += ["+" + line for line in new.splitlines()]
+                continue
+            # Line numbers here would count from the start of the edited text, not the file.
+            lines += ["@@" if line.startswith("@@") else line
+                      for line in difflib.unified_diff(old.splitlines(), new.splitlines(), lineterm="", n=2)
+                      if not line.startswith(("---", "+++"))]
+    except (AttributeError, KeyError, TypeError, IndexError, ValueError):
+        return None
+    return cut_diff(lines)
 
 
 # ------------------------------------------- what this session has read, locally
@@ -574,6 +636,8 @@ def run(event: dict) -> dict | None:
         )
         if me.get("ai_summary") is not False:
             payload["change"] = changed_lines(path, event.get("tool_name"), event.get("tool_input") or {})
+            if me.get("live") is not False:
+                payload["diff"] = live_diff(path, event)
     request = urllib.request.Request(
         me["server"].rstrip("/") + endpoint, data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"}, method="POST",

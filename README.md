@@ -255,10 +255,23 @@ When Claude Code successfully edits a file using Edit, Write, MultiEdit, or Note
 | Session | `f7cfb68784229f55` | An opaque id for the Claude Code session. Not the real session id. |
 | Change summary | `+5/-1 lines, touching count_todos` | Line counts and the names the edit introduced. Worked out on your computer. |
 | Changed lines | the removed and added lines, at most 4,000 characters | Only for the AI summary below. The server uses them once and does not store them. |
+| Diff | the edit as a unified diff, at most 6,000 characters | For the Live feed (below). The server keeps the newest 200 per room. |
 | Checkout id | `9a41…` | Says whether two edits were made in the same folder. Made with a random key that stays on your computer, so it names neither the computer nor the folder. |
 | File fingerprint | `c03e…` | A hash of the file after the edit. Lets a teammate's computer tell whether it has exactly that version. |
 
 **AI summary.** If the server has a Gemini key, its free small model turns the changed lines into one sentence, for example `Adds delete_todo to remove a todo by its id. (+10/-2 lines)`. That replaces the counts-and-names summary a few seconds after the edit. Paid checker tokens are never spent on this: without a Gemini key the local summary stays. To keep your changed lines on your computer, add `"ai_summary": false` to `coord/me.json`. Files that usually hold secrets (`.env`, key files) are never sent. Note that a free Gemini tier may use what it receives to improve Google's models.
+
+### Live edits
+
+The dashboard has a **Live edits** panel at the top. Every edit by a teammate's agent appears there in a second or two: who, which file and branch, a one-line summary, and the diff with removed lines in red and added lines in green. When two people edit the same file within ten minutes, a red line above the feed says so.
+
+Nothing else changes: the files stay on each person's computer and still travel through GitHub. The feed only shows what is happening.
+
+- The server keeps the newest 200 diffs per room. **Reset room** deletes them.
+- Anyone who knows the room name can read the feed, like the rest of the dashboard. Do not use it for code that must stay private.
+- To keep your diffs off the feed, add `"live": false` to `coord/me.json`. `"ai_summary": false` also keeps them home. Files that usually hold secrets (`.env`, key files) are never sent.
+- Edits made through a remote MCP link do not appear, because a link has no hooks.
+- Teammates who installed before this feature must run the installer again to get the new hook.
 
 The dashboard shows the summary next to each recent edit. When this session reads a file, the time is noted on your computer only (`coord/.state/`, kept out of Git).
 

@@ -193,6 +193,29 @@
   .git-pill.changes_requested { background: var(--am-amber-soft); color: var(--am-amber-ink); }
   .check-finding { margin: 4px 0; padding: 4px 0 4px 12px; border-left: 3px solid var(--am-amber-line); color: var(--am-ink); font-size: 14px; }
 
+  /* live edits */
+  #live-panel { margin-bottom: 16px; }
+  #live-panel > h2 { display: flex; align-items: center; gap: 10px; }
+  .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--am-green); animation: live-pulse 1.6s ease-in-out infinite; }
+  @keyframes live-pulse { 50% { opacity: .25; } }
+  .live-overlap { margin: 0 0 12px; padding: 10px 14px; background: var(--am-ember-soft); border: 1px solid var(--am-ember-line); border-radius: 12px; color: var(--am-ember); font: 600 14px/1.45 var(--am-font); }
+  #live-feed { display: grid; gap: 10px; max-height: 640px; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+  .live-card { padding: 12px 14px; background: #fff; border: 1px solid var(--am-line); border-radius: 16px; min-width: 0; }
+  .live-card.fresh { animation: live-in 2.4s var(--am-ease); }
+  @keyframes live-in { from { background: var(--am-blue-soft-2); border-color: var(--am-blue); } }
+  .live-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--am-ink); font-size: 14px; }
+  .live-head strong { font-weight: 600; }
+  .live-head code { color: var(--am-ink); font-size: 13px; overflow-wrap: anywhere; }
+  .live-head .when { margin-left: auto; color: var(--am-muted); font-size: 12.5px; white-space: nowrap; }
+  .live-card .edit-summary { margin: 6px 0 0; }
+  .diff { margin: 10px 0 0; max-height: 280px; overflow: auto; background: var(--am-inset); border: 1px solid var(--am-line); border-radius: 10px; font: 12.5px/1.55 var(--am-mono); color: var(--am-ink); tab-size: 4; }
+  .diff span { display: block; min-width: max-content; padding: 0 10px; white-space: pre; }
+  .diff .add { background: #e3f6ea; color: #0e5c32; }
+  .diff .del { background: #fdeaea; color: #8f1f1f; }
+  .diff .hunk { background: var(--am-blue-soft); color: var(--am-blue-ink); }
+  .diff .note { color: var(--am-muted); font-style: italic; }
+  @media (prefers-reduced-motion: reduce) { .live-dot, .live-card.fresh { animation: none; } }
+
   /* teammates */
   .people { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
   .person { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px; background: #fff; border: 1px solid var(--am-line); border-radius: 999px; color: var(--am-ink); font: 600 14px/20px var(--am-font); }
@@ -283,6 +306,7 @@
   <a class="am-logo" href="/"><span class="am-mark" aria-hidden="true">CD</span>CoopDev</a>
   <div class="am-links">
     <a href="#overview" aria-current="location">overview</a>
+    <a href="#live-panel">live</a>
     <a href="#claim-panel">claims</a>
     <a href="#chat-panel">chat</a>
     <a href="#ask-panel">requests</a>
@@ -332,6 +356,13 @@
     <div class="metric"><dt>Open requests</dt><dd id="requests-total">—</dd></div>
     <div class="metric"><dt>Files with overlap</dt><dd id="overlap-total">—</dd></div>
   </dl>
+
+  <section class="panel" id="live-panel">
+    <h2><span class="live-dot" aria-hidden="true"></span>Live edits <span class="count" id="live-count"></span></h2>
+    <p class="meta">Every file edit by a teammate's agent, as it happens.</p>
+    <div id="live-overlaps"></div>
+    <ul id="live-feed" aria-live="polite"></ul>
+  </section>
 
   <div class="grid">
    <div class="column">
@@ -1263,6 +1294,96 @@
     if (!groups.length) list.append(el("li", "empty", "No recent edits reported."));
   }
 
+  // ---- Live edits: every edit as a diff, newest first.
+  const LIVE_MAX_CARDS = 60;        // cards kept on the page
+  const LIVE_OVERLAP_SECONDS = 600; // two people in one file within this time is shown as an overlap
+  let liveAfter = 0;                // newest edit id already on the page
+  let liveLoading = false;
+  let liveStarted = false;          // false until the first answer: those cards are not highlighted
+  let liveEdits = [];               // what the cards were built from, newest first
+
+  function diffBlock(text) {
+    const block = el("pre", "diff");
+    for (const line of text.split("\n")) {
+      const kind = line.startsWith("@@") ? "hunk" : line.startsWith("+") ? "add"
+        : line.startsWith("-") ? "del" : line.startsWith("\\") ? "note" : null;
+      block.append(el("span", kind, line || " "));
+    }
+    return block;
+  }
+
+  function liveCard(edit, fresh) {
+    const card = el("li", fresh ? "live-card fresh" : "live-card");
+    card.dataset.id = edit.id;
+    const head = el("div", "live-head");
+    head.append(avatar(edit.author), el("strong", null, `${edit.author}'s agent`), el("code", null, edit.path));
+    if (edit.branch) head.append(el("span", "git-pill", edit.branch));
+    const when = timeSpan(edit.edited_at);
+    when.className = "when";
+    head.append(when);
+    card.append(head);
+    card.append(el("div", "meta edit-summary", edit.summary || ""));
+    card.append(diffBlock(edit.diff));
+    return card;
+  }
+
+  function renderLiveOverlaps(serverNow) {
+    const now = new Date(serverNow).getTime();
+    const authorsByPath = new Map();
+    for (const edit of liveEdits) {
+      if ((now - new Date(edit.edited_at).getTime()) / 1000 > LIVE_OVERLAP_SECONDS) continue;
+      if (!authorsByPath.has(edit.path)) authorsByPath.set(edit.path, new Set());
+      authorsByPath.get(edit.path).add(edit.author);
+    }
+    const box = $("live-overlaps");
+    const lines = [...authorsByPath].filter(([, authors]) => authors.size > 1)
+      .map(([path, authors]) => `${[...authors].join(" and ")} are both editing ${path}.`);
+    if (box.dataset.signature === lines.join("\n")) return;
+    box.dataset.signature = lines.join("\n");
+    box.replaceChildren(...lines.map((line) => el("p", "live-overlap", line)));
+  }
+
+  async function liveTick() {
+    if (liveLoading) return;
+    liveLoading = true;
+    let data;
+    try {
+      const response = await fetch(`/live?room=${encodeURIComponent(room)}&after=${liveAfter}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(response.status);
+      data = await response.json();
+    } catch {
+      return;
+    } finally {
+      liveLoading = false;
+    }
+    const feed = $("live-feed");
+    // Drop cards the server no longer keeps (older than its limit, or the room was reset).
+    liveEdits = liveEdits.filter((edit) => data.oldest !== null && edit.id >= data.oldest);
+    for (const card of [...feed.querySelectorAll(".live-card")]) {
+      if (data.oldest === null || Number(card.dataset.id) < data.oldest) card.remove();
+    }
+    if (data.latest === null) liveAfter = 0;
+    for (const edit of data.edits) {
+      feed.querySelector(".empty")?.remove();
+      feed.prepend(liveCard(edit, liveStarted));
+      liveEdits.unshift(edit);
+      liveAfter = Math.max(liveAfter, edit.id);
+    }
+    liveEdits = liveEdits.slice(0, LIVE_MAX_CARDS);
+    for (const card of [...feed.querySelectorAll(".live-card")].slice(LIVE_MAX_CARDS)) card.remove();
+    for (const [id, summary] of Object.entries(data.summaries || {})) {
+      const line = feed.querySelector(`.live-card[data-id="${Number(id)}"] .edit-summary`);
+      if (line && summary && line.textContent !== summary) line.textContent = summary;
+    }
+    if (!liveEdits.length && !feed.querySelector(".empty")) {
+      feed.replaceChildren(el("li", "empty", "No edits yet. When a teammate's agent edits a file, the change appears here in a second or two."));
+    }
+    liveStarted = true;
+    $("live-count").textContent = liveEdits.length || "";
+    renderLiveOverlaps(data.now);
+    if (data.edits.length) updateTimes(data.now);
+  }
+
   async function tick() {
     if (loading) return;
     loading = true;
@@ -1352,7 +1473,9 @@
   });
 
   tick();
+  liveTick();
   setInterval(tick, 1000);
+  setInterval(liveTick, 1000);
 </script>
 </body>
 </html>

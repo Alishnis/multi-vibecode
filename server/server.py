@@ -12,6 +12,7 @@ import io
 import json
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import zipfile
@@ -50,6 +51,10 @@ CLIENT_FILES = (
 
 Category = Literal["stack", "api", "data", "convention", "other"]
 FILE_ACTIVITY_MINUTES = 30
+LIVE_KEEP = 200               # diffs kept per room for the Live feed; older ones are deleted
+LIVE_DIFF_LIMIT = 6000        # characters of one diff; longer text is cut
+LIVE_PAGE = 50                # most diffs one request returns
+SECRET_FILE_NAMES = re.compile(r"(^\.env|secret|credential|password|\.pem$|\.key$|id_rsa|\.p12$)", re.IGNORECASE)
 MESSAGE_KEEP = 200            # chat messages kept per room; older ones are deleted
 MESSAGES_PER_PROMPT = 5       # an agent is told about at most this many new messages at once
 MESSAGE_FIRST_HOURS = 6       # a first prompt hears about messages from this far back
@@ -208,6 +213,18 @@ def create_tables() -> None:
         # them reveals a folder name, a prompt or any code.
         for column in ("session", "checkout_id", "summary", "tool", "content_hash", "blob"):
             add_column(conn, "file_edits", column, "TEXT")
+        # The Live feed: each edit as a diff, newest LIVE_KEEP per room. Unlike
+        # file_edits (one row per file and person), every edit is its own row.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS live_edits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, room TEXT NOT NULL, path TEXT NOT NULL,
+                author TEXT NOT NULL, branch TEXT, session TEXT, tool TEXT, summary TEXT,
+                diff TEXT NOT NULL, edited_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS live_edits_room ON live_edits(room, id)")
         # A claim says what a teammate is about to work on, before any edit.
         # It is a notice for the others, never a lock.
         conn.execute(
@@ -569,6 +586,12 @@ class FileActivity(RoomAuthor):
     # in one sentence. Never stored. Longer text is cut, not refused.
     change: Annotated[str | None, BeforeValidator(
         lambda value: value[:CHANGE_TEXT_LIMIT] if isinstance(value, str) and value.strip() else None
+    )] = None
+
+    # The edit as a unified diff, for the Live feed. Stored (see live_edits).
+    # Only clients that know about the feed send it.
+    diff: Annotated[str | None, BeforeValidator(
+        lambda value: value[:LIVE_DIFF_LIMIT] if isinstance(value, str) and value.strip() else None
     )] = None
 
     @field_validator("path")
@@ -1316,6 +1339,7 @@ def link_repository(link: RoomRepository, x_contract_token: str | None = Header(
         if cursor.rowcount:
             # Earlier activity may belong to a different project before the room was linked.
             conn.execute("DELETE FROM file_edits WHERE room = ?", (link.room,))
+            conn.execute("DELETE FROM live_edits WHERE room = ?", (link.room,))
     return {"repository": repository}
 
 
@@ -1354,7 +1378,7 @@ def reset_room(room: RoomParam, x_contract_token: str | None = Header(None)) -> 
         require_approval(room, x_contract_token)
     with connect() as conn:
         for table in ("decisions", "conflicts", "people", "decision_requests",
-                      "git_activity", "file_edits", "room_repositories", "share_checks", "claims", "messages", "asks"):
+                      "git_activity", "file_edits", "live_edits", "room_repositories", "share_checks", "claims", "messages", "asks"):
             conn.execute(f"DELETE FROM {table} WHERE room = ?", (room,))
     return {"room": room, "reset": True}
 
@@ -1462,6 +1486,10 @@ def improve_summary(room: str, path: str, author: str, edited_at: str, local: st
             "UPDATE file_edits SET summary = ? WHERE room = ? AND path = ? AND author = ? AND edited_at = ?",
             (summary[:300], room, path, author, edited_at),
         )
+        conn.execute(
+            "UPDATE live_edits SET summary = ? WHERE room = ? AND path = ? AND author = ? AND edited_at = ?",
+            (summary[:300], room, path, author, edited_at),
+        )
 
 
 @app.post("/files/edits")
@@ -1485,10 +1513,46 @@ def record_file_edit(activity: FileActivity, background: BackgroundTasks) -> dic
             (activity.room, activity.path, activity.author, activity.branch, edited_at, activity.session,
              activity.checkout_id, activity.summary, activity.tool, activity.content_hash, activity.blob),
         )
+        # The client never sends a diff of a secrets file; this is a second check.
+        if activity.diff and not SECRET_FILE_NAMES.search(PurePosixPath(activity.path).name):
+            conn.execute(
+                "INSERT INTO live_edits (room, path, author, branch, session, tool, summary, diff, edited_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (activity.room, activity.path, activity.author, activity.branch, activity.session,
+                 activity.tool, activity.summary, activity.diff, edited_at),
+            )
+            conn.execute(
+                "DELETE FROM live_edits WHERE room = ? AND id NOT IN "
+                "(SELECT id FROM live_edits WHERE room = ? ORDER BY id DESC LIMIT ?)",
+                (activity.room, activity.room, LIVE_KEEP),
+            )
     if activity.change and conflicts.small_configured():
         background.add_task(improve_summary, activity.room, activity.path, activity.author,
                             edited_at, activity.summary, activity.change)
     return {"ok": True}
+
+
+@app.get("/live")
+def live_feed(room: RoomParam, after: Annotated[int, Query(ge=0)] = 0) -> dict:
+    """Edits newer than `after`, oldest first, for the Live feed on the dashboard.
+
+    The page asks every second with the newest id it has. "oldest" and
+    "latest" tell it which of its cards the server no longer keeps.
+    """
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT id, path, author, branch, session, tool, summary, diff, edited_at FROM live_edits "
+            "WHERE room = ? AND id > ? ORDER BY id DESC LIMIT ?", (room, after, LIVE_PAGE),
+        ).fetchall()
+        oldest, latest = conn.execute(
+            "SELECT MIN(id), MAX(id) FROM live_edits WHERE room = ?", (room,),
+        ).fetchone()
+        # A summary may be rewritten by the small model after the card was sent.
+        summaries = {row["id"]: row["summary"] for row in conn.execute(
+            "SELECT id, summary FROM live_edits WHERE room = ? AND id <= ? ORDER BY id DESC LIMIT 10", (room, after),
+        )}
+    return {"edits": [dict(row) for row in reversed(rows)], "oldest": oldest, "latest": latest,
+            "summaries": summaries, "now": now()}
 
 
 @app.post("/claims")

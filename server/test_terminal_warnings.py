@@ -263,9 +263,12 @@ class TerminalWarningsTest(unittest.TestCase):
         self.assertNotIn(str(self.root), json.dumps(sent))     # and so does the folder
         # The changed lines go along for the one-sentence AI summary. The server does not keep them.
         self.assertEqual(sent["change"], "-pass\n+def list_todos():\n+    return SECRET_TOKEN")
-        state = self.enterContext(TestClient(server.app)).get("/state?room=terminal-test")
+        # The same edit as a diff goes to the Live feed, and only there.
+        self.assertEqual(sent["diff"], "@@\n-pass\n+def list_todos():\n+    return SECRET_TOKEN")
+        client = self.enterContext(TestClient(server.app))
+        state = client.get("/state?room=terminal-test")
         self.assertNotIn("SECRET_TOKEN", state.text)
-        self.assertNotIn(b"SECRET_TOKEN", (self.root / "test.db").read_bytes())
+        self.assertEqual(client.get("/live?room=terminal-test").json()["edits"][0]["diff"], sent["diff"])
         edit = state.json()["files"]["edits"][0]
         self.assertEqual((edit["summary"], edit["tool"]), ("+2/-1 lines, touching list_todos", "Edit"))
         warning = self.hook("Mei")
@@ -276,10 +279,22 @@ class TerminalWarningsTest(unittest.TestCase):
         edit = {"old_string": "A=1", "new_string": "A=SECRET_TOKEN"}
         self.hook("Ali", "PostToolUse", tool_input={"file_path": ".env.local", **edit})
         self.assertIsNone(self.requests[-1][1]["change"])
+        self.assertIsNone(self.requests[-1][1]["diff"])
         self.configure("Ali", ai_summary=False)
         self.hook("Ali", "PostToolUse", tool_input={"file_path": "src/todos.py", **edit})
         self.assertNotIn("change", self.requests[-1][1])
+        self.assertNotIn("diff", self.requests[-1][1])
         self.assertNotIn("SECRET_TOKEN", json.dumps(self.requests))
+        self.assertNotIn(b"SECRET_TOKEN", (self.root / "test.db").read_bytes())
+
+    def test_live_false_keeps_the_diff_home_but_still_sends_the_summary_lines(self):
+        self.configure("Ali", live=False)
+        self.hook("Ali", "PostToolUse", tool_input={
+            "file_path": "src/todos.py", "old_string": "A=1", "new_string": "A=SECRET_TOKEN"})
+        sent = self.requests[-1][1]
+        self.assertNotIn("diff", sent)
+        self.assertEqual(sent["change"], "-A=1\n+A=SECRET_TOKEN")
+        self.assertNotIn(b"SECRET_TOKEN", (self.root / "test.db").read_bytes())
 
     def test_a_claim_pauses_a_teammates_first_edit_of_the_file_only(self):
         client = self.enterContext(TestClient(server.app))
